@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dayline</string>
+	<string>Perch</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,8 +25,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Dayline needs full calendar access to show upcoming events in the menu bar.</string>
+	<string>Perch needs full calendar access to show upcoming events in the menu bar.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Dayline needs calendar access to show upcoming events in the menu bar.</string>
+	<string>Perch needs calendar access to show upcoming events in the menu bar.</string>
 </dict>
 </plist>

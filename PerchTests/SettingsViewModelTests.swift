@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
@@ -141,7 +141,7 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     private func makeDefaults() -> UserDefaults {
-        let suiteName = "DaylineTests-\(UUID().uuidString)"
+        let suiteName = "PerchTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults

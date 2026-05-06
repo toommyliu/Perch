@@ -7,7 +7,7 @@ final class EventKitCalendarProvider: CalendarProviding {
 
     init(eventStore: EKEventStore = EKEventStore()) {
         self.eventStore = eventStore
-        DaylineLog.info("EventKitCalendarProvider initialized")
+        PerchLog.info("EventKitCalendarProvider initialized")
     }
 
     func authorizationState() -> CalendarAccessState {
@@ -33,11 +33,11 @@ final class EventKitCalendarProvider: CalendarProviding {
         do {
             granted = try await eventStore.requestFullAccessToEvents()
         } catch {
-            DaylineLog.error("Calendar full access request failed: \(error.localizedDescription)")
+            PerchLog.error("Calendar full access request failed: \(error.localizedDescription)")
             return authorizationState()
         }
 
-        DaylineLog.info("Calendar full access request completed: \(granted)")
+        PerchLog.info("Calendar full access request completed: \(granted)")
         return granted ? .fullAccess : authorizationState()
     }
 

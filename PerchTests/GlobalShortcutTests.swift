@@ -1,7 +1,7 @@
 import AppKit
 import Carbon
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class GlobalShortcutTests: XCTestCase {
     func testControlCommandKMatchesDefaultShortcut() {

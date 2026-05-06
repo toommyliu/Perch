@@ -1,6 +1,6 @@
 import Carbon
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class GlobalHotKeyControllerTests: XCTestCase {
     func testApplyShortcutRegistersNewShortcutAfterUnregisteringOldShortcut() {

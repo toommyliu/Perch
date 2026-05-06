@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class MenuBarLabelFormatterTests: XCTestCase {
     private let formatter = MenuBarLabelFormatter()

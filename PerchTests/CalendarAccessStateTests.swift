@@ -1,5 +1,5 @@
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class CalendarAccessStateTests: XCTestCase {
     func testFullAccessCanReadEventsAndHasNoSettingsAction() {

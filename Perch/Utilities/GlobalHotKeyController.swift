@@ -165,7 +165,7 @@ final class GlobalHotKeyController {
         )
 
         guard handlerStatus == noErr else {
-            DaylineLog.error("Failed to install global hotkey handler: \(handlerStatus)")
+            PerchLog.error("Failed to install global hotkey handler: \(handlerStatus)")
             return false
         }
 
@@ -184,12 +184,12 @@ final class GlobalHotKeyController {
 
         let registration = registrar.register(shortcut: activeShortcut, hotKeyID: hotKeyID)
         guard registration.status == noErr, let hotKeyRef = registration.hotKeyRef else {
-            DaylineLog.error("Failed to register global hotkey \(activeShortcut.displayTitle): \(registration.status)")
+            PerchLog.error("Failed to register global hotkey \(activeShortcut.displayTitle): \(registration.status)")
             return .failure(registration.status)
         }
 
         self.hotKeyRef = hotKeyRef
-        DaylineLog.info("Registered global hotkey \(activeShortcut.displayTitle)")
+        PerchLog.info("Registered global hotkey \(activeShortcut.displayTitle)")
         return .success
     }
 
@@ -200,7 +200,7 @@ final class GlobalHotKeyController {
 
         registrar.unregister(hotKeyRef)
         self.hotKeyRef = nil
-        DaylineLog.info("Unregistered global hotkey \(activeShortcut.displayTitle)")
+        PerchLog.info("Unregistered global hotkey \(activeShortcut.displayTitle)")
     }
 
     private static func fourCharacterCode(_ string: String) -> OSType {

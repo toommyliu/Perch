@@ -6,7 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalHotKeyController: GlobalHotKeyController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        DaylineLog.info("Application did finish launching")
+        PerchLog.info("Application did finish launching")
         NSApp.setActivationPolicy(.accessory)
 
         let settingsStore = SettingsStore()
@@ -49,11 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         refreshCoordinator.start()
         menuBarController.refresh()
-        DaylineLog.info("Application setup complete")
+        PerchLog.info("Application setup complete")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        DaylineLog.info("Application will terminate")
+        PerchLog.info("Application will terminate")
         refreshCoordinator?.stop()
     }
 }

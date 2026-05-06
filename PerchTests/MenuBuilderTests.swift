@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class MenuBuilderTests: XCTestCase {
     private let builder = MenuBuilder()
@@ -78,7 +78,7 @@ final class MenuBuilderTests: XCTestCase {
 
         XCTAssertEqual(snapshot.sections[0].rows.map(\.title), [
             "Full calendar access required",
-            "Dayline can only write calendar events. Enable full access in System Settings so it can read upcoming events.",
+            "Perch can only write calendar events. Enable full access in System Settings so it can read upcoming events.",
             "Open Calendar Privacy Settings..."
         ])
         XCTAssertEqual(snapshot.sections[0].rows[2].action, .openPrivacySettings)
@@ -88,7 +88,7 @@ final class MenuBuilderTests: XCTestCase {
         let snapshot = builder.snapshot(accessState: .fullAccess, events: [], now: Date(), calendar: calendar)
         let visibleFooterRows = snapshot.footerRows.filter { !$0.isHidden }
 
-        XCTAssertEqual(visibleFooterRows.map(\.title), ["Open Calendar", "Settings...", "Quit Dayline"])
+        XCTAssertEqual(visibleFooterRows.map(\.title), ["Open Calendar", "Settings...", "Quit Perch"])
         XCTAssertEqual(visibleFooterRows[0].keyEquivalent, "1")
         XCTAssertEqual(visibleFooterRows[0].keyEquivalentModifierMask, [.command])
 

@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "100000000000000000000501"
-               BuildableName = "Dayline.app"
-               BlueprintName = "Dayline"
-               ReferencedContainer = "container:Dayline.xcodeproj">
+               BuildableName = "Perch.app"
+               BlueprintName = "Perch"
+               ReferencedContainer = "container:Perch.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -30,9 +30,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "100000000000000000000502"
-               BuildableName = "DaylineTests.xctest"
-               BlueprintName = "DaylineTests"
-               ReferencedContainer = "container:Dayline.xcodeproj">
+               BuildableName = "PerchTests.xctest"
+               BlueprintName = "PerchTests"
+               ReferencedContainer = "container:Perch.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -50,9 +50,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "100000000000000000000502"
-               BuildableName = "DaylineTests.xctest"
-               BlueprintName = "DaylineTests"
-               ReferencedContainer = "container:Dayline.xcodeproj">
+               BuildableName = "PerchTests.xctest"
+               BlueprintName = "PerchTests"
+               ReferencedContainer = "container:Perch.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "100000000000000000000501"
-            BuildableName = "Dayline.app"
-            BlueprintName = "Dayline"
-            ReferencedContainer = "container:Dayline.xcodeproj">
+            BuildableName = "Perch.app"
+            BlueprintName = "Perch"
+            ReferencedContainer = "container:Perch.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -89,9 +89,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "100000000000000000000501"
-            BuildableName = "Dayline.app"
-            BlueprintName = "Dayline"
-            ReferencedContainer = "container:Dayline.xcodeproj">
+            BuildableName = "Perch.app"
+            BlueprintName = "Perch"
+            ReferencedContainer = "container:Perch.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

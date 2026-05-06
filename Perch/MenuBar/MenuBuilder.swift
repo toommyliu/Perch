@@ -214,7 +214,7 @@ struct MenuBuilder {
                 isHidden: true,
                 allowsKeyEquivalentWhenHidden: true
             ),
-            CalendarMenuRow(title: "Quit Dayline", isEnabled: true, color: nil, action: .quit)
+            CalendarMenuRow(title: "Quit Perch", isEnabled: true, color: nil, action: .quit)
         ]
     }
 

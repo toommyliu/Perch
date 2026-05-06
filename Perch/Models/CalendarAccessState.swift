@@ -35,17 +35,17 @@ extension CalendarAccessState {
     var statusDetail: String {
         switch self {
         case .notDetermined:
-            return "Dayline needs full calendar access to read upcoming events."
+            return "Perch needs full calendar access to read upcoming events."
         case .fullAccess:
-            return "Dayline can read your calendars and show upcoming events."
+            return "Perch can read your calendars and show upcoming events."
         case .writeOnly:
-            return "Dayline can only write calendar events. Enable full access in System Settings so it can read upcoming events."
+            return "Perch can only write calendar events. Enable full access in System Settings so it can read upcoming events."
         case .denied:
             return "Enable calendar access in System Settings to show upcoming events."
         case .restricted:
             return "Calendar access is restricted by macOS or device management."
         case .unknown:
-            return "Dayline cannot determine calendar access. Check Calendar privacy settings."
+            return "Perch cannot determine calendar access. Check Calendar privacy settings."
         }
     }
 

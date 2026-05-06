@@ -28,11 +28,11 @@ final class MenuBarController: NSObject {
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
-        DaylineLog.info("MenuBarController initialized")
+        PerchLog.info("MenuBarController initialized")
 
         settingsWindowController.onSettingsChanged = { [weak self] in
             Task { @MainActor in
-                DaylineLog.info("Settings changed; refreshing calendar data")
+                PerchLog.info("Settings changed; refreshing calendar data")
                 await self?.refreshCalendarData()
             }
         }
@@ -50,19 +50,19 @@ final class MenuBarController: NSObject {
 
     private func configureStatusItem() {
         guard let button = statusItem.button else {
-            DaylineLog.error("Status item has no button")
+            PerchLog.error("Status item has no button")
             return
         }
 
         button.imagePosition = .imageLeading
-        button.toolTip = "Dayline"
+        button.toolTip = "Perch"
         button.title = ""
-        DaylineLog.info("Status item configured")
+        PerchLog.info("Status item configured")
     }
 
     private func refreshCalendarData() async {
         let accessState = permissionController.refreshStatus()
-        DaylineLog.info("Refresh started with access state: \(String(describing: accessState))")
+        PerchLog.info("Refresh started with access state: \(String(describing: accessState))")
 
         guard accessState.isSufficientForReadingEvents else {
             events = []
@@ -79,10 +79,10 @@ final class MenuBarController: NSObject {
 
         do {
             events = try await calendarProvider.events(from: startDate, to: endDate)
-            DaylineLog.info("Fetched \(events.count) events")
+            PerchLog.info("Fetched \(events.count) events")
         } catch {
             events = []
-            DaylineLog.error("Failed to fetch events: \(error.localizedDescription)")
+            PerchLog.error("Failed to fetch events: \(error.localizedDescription)")
         }
 
         updateStatusItem()
@@ -101,12 +101,12 @@ final class MenuBarController: NSObject {
             statusItem.length = 30
             button.title = ""
             button.image = MenuIconRenderer.dateIcon(day: day)
-            DaylineLog.info("Status item set to date icon for day \(day)")
+            PerchLog.info("Status item set to date icon for day \(day)")
         case let .event(title, relativeText, color):
             statusItem.length = NSStatusItem.variableLength
             button.image = MenuIconRenderer.colorBar(color: color)
             button.title = " \(title) · \(relativeText)"
-            DaylineLog.info("Status item set to event: \(title) · \(relativeText)")
+            PerchLog.info("Status item set to event: \(title) · \(relativeText)")
         }
     }
 
@@ -119,32 +119,32 @@ final class MenuBarController: NSObject {
         let menu = menuBuilder.makeMenu(from: snapshot, target: self)
         menu.delegate = self
         statusItem.menu = menu
-        DaylineLog.info("Menu updated with \(snapshot.sections.count) sections and access state: \(String(describing: accessState))")
+        PerchLog.info("Menu updated with \(snapshot.sections.count) sections and access state: \(String(describing: accessState))")
     }
 
     func toggleTrayVisibility() {
         if isTrayMenuOpen {
-            DaylineLog.info("Closing tray menu from global hotkey")
+            PerchLog.info("Closing tray menu from global hotkey")
             statusItem.menu?.cancelTracking()
             return
         }
 
         guard let button = statusItem.button else {
-            DaylineLog.error("Cannot open tray menu because status item has no button")
+            PerchLog.error("Cannot open tray menu because status item has no button")
             return
         }
 
-        DaylineLog.info("Opening tray menu from global hotkey")
+        PerchLog.info("Opening tray menu from global hotkey")
         button.performClick(nil)
     }
 
     @objc func closeTrayMenuFromMenuItem() {
-        DaylineLog.info("Closing tray menu from menu key equivalent")
+        PerchLog.info("Closing tray menu from menu key equivalent")
         statusItem.menu?.cancelTracking()
     }
 
     @objc func requestCalendarAccess() {
-        DaylineLog.info("Calendar access requested from menu")
+        PerchLog.info("Calendar access requested from menu")
         Task {
             _ = await permissionController.requestFullAccess()
             await refreshCalendarData()
@@ -152,14 +152,14 @@ final class MenuBarController: NSObject {
     }
 
     @objc func openCalendarPrivacySettings() {
-        DaylineLog.info("Opening Calendar privacy settings")
+        PerchLog.info("Opening Calendar privacy settings")
         permissionController.openPrivacySettings()
     }
 
     @objc func openCalendarApp() {
-        DaylineLog.info("Opening Apple Calendar")
+        PerchLog.info("Opening Apple Calendar")
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") else {
-            DaylineLog.error("Could not resolve Apple Calendar bundle id")
+            PerchLog.error("Could not resolve Apple Calendar bundle id")
             return
         }
 
@@ -168,12 +168,12 @@ final class MenuBarController: NSObject {
     }
 
     @objc func openSettings() {
-        DaylineLog.info("Opening settings window")
+        PerchLog.info("Opening settings window")
         settingsWindowController.present()
     }
 
     @objc func quit() {
-        DaylineLog.info("Quit requested")
+        PerchLog.info("Quit requested")
         NSApp.terminate(nil)
     }
 }

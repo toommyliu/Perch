@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import Dayline
+@testable import Perch
 
 final class SettingsStoreTests: XCTestCase {
     func testDefaultDisplayModeIsWithinSixHours() {
@@ -90,7 +90,7 @@ final class SettingsStoreTests: XCTestCase {
     }
 
     private func makeDefaults() -> UserDefaults {
-        let suiteName = "DaylineTests-\(UUID().uuidString)"
+        let suiteName = "PerchTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults

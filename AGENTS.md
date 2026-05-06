@@ -2,7 +2,7 @@
 
 ## Project Snapshot
 
-macos-calendar-menubar is a native macOS menu bar app for showing upcoming Apple Calendar events through EventKit. The app is currently in very early development, with the first implementation focused on creating a read-only, AppKit-first experience that reliably displays calendar events in the menu bar.
+Perch is a native macOS menu bar app for showing upcoming Apple Calendar events through EventKit. The app is currently in very early development, with the first implementation focused on creating a read-only, AppKit-first experience that reliably displays calendar events in the menu bar.
 
 ## Core Priorities
 
