@@ -101,10 +101,23 @@ final class MenuBuilderTests: XCTestCase {
 
         let closeRow = snapshot.footerRows.first { $0.action == .closeMenu }
         XCTAssertEqual(closeRow?.title, "Close Menu")
-        XCTAssertEqual(closeRow?.keyEquivalent, TrayMenuHotKey.keyEquivalent)
-        XCTAssertEqual(closeRow?.keyEquivalentModifierMask, TrayMenuHotKey.menuModifierFlags)
+        XCTAssertEqual(closeRow?.keyEquivalent, GlobalShortcut.defaultValue.keyEquivalent)
+        XCTAssertEqual(closeRow?.keyEquivalentModifierMask, GlobalShortcut.defaultValue.menuModifierFlags)
         XCTAssertEqual(closeRow?.isHidden, true)
         XCTAssertEqual(closeRow?.allowsKeyEquivalentWhenHidden, true)
+    }
+
+    func testCloseMenuShortcutRowUsesConfiguredShortcut() {
+        let shortcut = GlobalShortcut(
+            keyEquivalent: "p",
+            keyCode: 35,
+            modifiers: [.option, .command]
+        )
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: [], globalShortcut: shortcut, now: Date(), calendar: calendar)
+
+        let closeRow = snapshot.footerRows.first { $0.action == .closeMenu }
+        XCTAssertEqual(closeRow?.keyEquivalent, "p")
+        XCTAssertEqual(closeRow?.keyEquivalentModifierMask, [.option, .command])
     }
 
     @MainActor
@@ -138,6 +151,23 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: ",", modifierFlags: [.command, .capsLock])))
         XCTAssertFalse(menu.performKeyEquivalent(with: keyEvent(characters: ",", modifierFlags: [.command, .shift])))
         XCTAssertEqual(target.openSettingsCount, 1)
+    }
+
+    @MainActor
+    func testMenuPerformsConfiguredCloseShortcutWhileOpen() {
+        let shortcut = GlobalShortcut(
+            keyEquivalent: "p",
+            keyCode: 35,
+            modifiers: [.option, .command]
+        )
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: [], globalShortcut: shortcut, now: Date(), calendar: calendar)
+        let target = MenuShortcutTarget()
+        let menu = builder.makeMenu(from: snapshot, target: target)
+
+        XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: "p", modifierFlags: [.option, .command])))
+        XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: "p", modifierFlags: [.option, .command, .capsLock])))
+        XCTAssertFalse(menu.performKeyEquivalent(with: keyEvent(characters: "p", modifierFlags: [.option, .command, .shift])))
+        XCTAssertEqual(target.closeMenuCount, 2)
     }
 
     private func event(title: String, start: Date, end: Date) -> CalendarEvent {
@@ -183,6 +213,7 @@ final class MenuBuilderTests: XCTestCase {
 private final class MenuShortcutTarget: NSObject {
     private(set) var openCalendarCount = 0
     private(set) var openSettingsCount = 0
+    private(set) var closeMenuCount = 0
 
     @objc func openCalendarApp() {
         openCalendarCount += 1
@@ -191,45 +222,8 @@ private final class MenuShortcutTarget: NSObject {
     @objc func openSettings() {
         openSettingsCount += 1
     }
-}
 
-final class TrayMenuHotKeyTests: XCTestCase {
-    func testControlCommandKMatchesMenuEvent() {
-        XCTAssertTrue(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.command, .control])))
-    }
-
-    func testCommandKDoesNotMatchMenuEvent() {
-        XCTAssertFalse(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.command])))
-    }
-
-    func testControlKDoesNotMatchMenuEvent() {
-        XCTAssertFalse(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.control])))
-    }
-
-    func testControlCommandShiftKDoesNotMatchMenuEvent() {
-        XCTAssertFalse(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.command, .control, .shift])))
-    }
-
-    func testControlCommandOptionKDoesNotMatchMenuEvent() {
-        XCTAssertFalse(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.command, .control, .option])))
-    }
-
-    func testControlCommandKWithCapsLockMatchesMenuEvent() {
-        XCTAssertTrue(TrayMenuHotKey.matchesMenuEvent(keyEvent(modifierFlags: [.command, .control, .capsLock])))
-    }
-
-    private func keyEvent(modifierFlags: NSEvent.ModifierFlags) -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: modifierFlags,
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
-            characters: TrayMenuHotKey.keyEquivalent,
-            charactersIgnoringModifiers: TrayMenuHotKey.keyEquivalent,
-            isARepeat: false,
-            keyCode: UInt16(TrayMenuHotKey.carbonKeyCode)
-        )!
+    @objc func closeTrayMenuFromMenuItem() {
+        closeMenuCount += 1
     }
 }

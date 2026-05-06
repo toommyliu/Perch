@@ -3,6 +3,7 @@ import SwiftUI
 
 final class SettingsWindowController: NSWindowController {
     var onSettingsChanged: (() -> Void)?
+    var onShortcutChangeRequested: ((GlobalShortcut) -> HotKeyRegistrationResult)?
 
     private let settingsStore: SettingsStore
     private let permissionController: CalendarPermissionController
@@ -12,7 +13,7 @@ final class SettingsWindowController: NSWindowController {
         self.permissionController = permissionController
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 230),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 285),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -27,7 +28,10 @@ final class SettingsWindowController: NSWindowController {
 
         let viewModel = SettingsViewModel(
             settingsStore: settingsStore,
-            permissionController: permissionController
+            permissionController: permissionController,
+            onShortcutChangeRequested: { [weak self] shortcut in
+                self?.onShortcutChangeRequested?(shortcut) ?? .failure(OSStatus(-1))
+            }
         ) { [weak self] in
             self?.onSettingsChanged?()
         }

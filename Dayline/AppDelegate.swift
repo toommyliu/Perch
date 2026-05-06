@@ -29,8 +29,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         self.menuBarController = menuBarController
         self.refreshCoordinator = refreshCoordinator
-        let globalHotKeyController = GlobalHotKeyController { [weak menuBarController] in
+        let globalHotKeyController = GlobalHotKeyController(initialShortcut: settingsStore.settings.globalShortcut) { [weak menuBarController] in
             menuBarController?.toggleTrayVisibility()
+        }
+        settingsWindowController.onShortcutChangeRequested = { [weak globalHotKeyController] shortcut in
+            globalHotKeyController?.applyShortcut(shortcut) ?? .failure(OSStatus(-1))
         }
 
         // While an NSMenu is tracking, AppKit can postpone Carbon hotkey delivery until

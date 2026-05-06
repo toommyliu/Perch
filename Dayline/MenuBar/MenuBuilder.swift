@@ -124,6 +124,7 @@ struct MenuBuilder {
     func snapshot(
         accessState: CalendarAccessState,
         events: [CalendarEvent],
+        globalShortcut: GlobalShortcut = .defaultValue,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> CalendarMenuSnapshot {
@@ -138,7 +139,7 @@ struct MenuBuilder {
                         ]
                     )
                 ],
-                footerRows: standardFooterRows
+                footerRows: standardFooterRows(globalShortcut: globalShortcut)
             )
         case .writeOnly, .denied, .restricted, .unknown:
             return CalendarMenuSnapshot(
@@ -152,10 +153,10 @@ struct MenuBuilder {
                         ]
                     )
                 ],
-                footerRows: standardFooterRows
+                footerRows: standardFooterRows(globalShortcut: globalShortcut)
             )
         case .fullAccess:
-            return eventsSnapshot(events: events, now: now, calendar: calendar)
+            return eventsSnapshot(events: events, globalShortcut: globalShortcut, now: now, calendar: calendar)
         }
     }
 
@@ -183,7 +184,7 @@ struct MenuBuilder {
         return menu
     }
 
-    private var standardFooterRows: [CalendarMenuRow] {
+    private func standardFooterRows(globalShortcut: GlobalShortcut) -> [CalendarMenuRow] {
         [
             CalendarMenuRow(
                 title: "Open Calendar",
@@ -208,8 +209,8 @@ struct MenuBuilder {
                 isEnabled: true,
                 color: nil,
                 action: .closeMenu,
-                keyEquivalent: TrayMenuHotKey.keyEquivalent,
-                keyEquivalentModifierMask: TrayMenuHotKey.menuModifierFlags,
+                keyEquivalent: globalShortcut.keyEquivalent,
+                keyEquivalentModifierMask: globalShortcut.menuModifierFlags,
                 isHidden: true,
                 allowsKeyEquivalentWhenHidden: true
             ),
@@ -217,7 +218,12 @@ struct MenuBuilder {
         ]
     }
 
-    private func eventsSnapshot(events: [CalendarEvent], now: Date, calendar: Calendar) -> CalendarMenuSnapshot {
+    private func eventsSnapshot(
+        events: [CalendarEvent],
+        globalShortcut: GlobalShortcut,
+        now: Date,
+        calendar: Calendar
+    ) -> CalendarMenuSnapshot {
         let visibleEvents = events
             .filter { $0.endDate >= now }
             .sorted {
@@ -242,7 +248,7 @@ struct MenuBuilder {
                         ]
                     )
                 ],
-                footerRows: standardFooterRows
+                footerRows: standardFooterRows(globalShortcut: globalShortcut)
             )
         }
 
@@ -264,7 +270,7 @@ struct MenuBuilder {
             )
         }
 
-        return CalendarMenuSnapshot(sections: sections, footerRows: standardFooterRows)
+        return CalendarMenuSnapshot(sections: sections, footerRows: standardFooterRows(globalShortcut: globalShortcut))
     }
 
     private func rowTitle(for event: CalendarEvent) -> String {

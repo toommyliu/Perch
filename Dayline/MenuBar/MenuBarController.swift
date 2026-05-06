@@ -111,7 +111,11 @@ final class MenuBarController: NSObject {
     }
 
     private func updateMenu(accessState: CalendarAccessState) {
-        let snapshot = menuBuilder.snapshot(accessState: accessState, events: events)
+        let snapshot = menuBuilder.snapshot(
+            accessState: accessState,
+            events: events,
+            globalShortcut: settingsStore.settings.globalShortcut
+        )
         let menu = menuBuilder.makeMenu(from: snapshot, target: self)
         menu.delegate = self
         statusItem.menu = menu

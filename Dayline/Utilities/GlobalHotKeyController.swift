@@ -2,51 +2,107 @@ import AppKit
 import Carbon
 import Foundation
 
-struct TrayMenuHotKey {
-    static let keyEquivalent = "k"
-    static let carbonKeyCode = UInt32(kVK_ANSI_K)
-    static let carbonModifierFlags = UInt32(cmdKey | controlKey)
-    static let menuModifierFlags: NSEvent.ModifierFlags = [.command, .control]
+enum HotKeyRegistrationResult: Equatable {
+    case success
+    case failure(OSStatus)
+}
 
-    private static let meaningfulMenuModifierFlags: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+struct HotKeyRegistration {
+    let status: OSStatus
+    let hotKeyRef: EventHotKeyRef?
+}
 
-    static func matchesMenuEvent(_ event: NSEvent) -> Bool {
-        guard event.type == .keyDown else {
-            return false
-        }
+protocol HotKeyRegistering {
+    func register(shortcut: GlobalShortcut, hotKeyID: EventHotKeyID) -> HotKeyRegistration
+    func unregister(_ hotKeyRef: EventHotKeyRef)
+}
 
-        let isExpectedKey = event.keyCode == UInt16(carbonKeyCode)
-            || event.charactersIgnoringModifiers?.lowercased() == keyEquivalent
-        guard isExpectedKey else {
-            return false
-        }
+struct CarbonHotKeyRegistrar: HotKeyRegistering {
+    func register(shortcut: GlobalShortcut, hotKeyID: EventHotKeyID) -> HotKeyRegistration {
+        var hotKeyRef: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            UInt32(shortcut.keyCode),
+            shortcut.carbonModifierFlags,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
 
-        return event.modifierFlags.intersection(meaningfulMenuModifierFlags) == menuModifierFlags
+        return HotKeyRegistration(status: status, hotKeyRef: hotKeyRef)
+    }
+
+    func unregister(_ hotKeyRef: EventHotKeyRef) {
+        UnregisterEventHotKey(hotKeyRef)
     }
 }
 
 final class GlobalHotKeyController {
     private let onToggle: @MainActor () -> Void
+    private let registrar: HotKeyRegistering
     private let hotKeyID = EventHotKeyID(
         signature: GlobalHotKeyController.fourCharacterCode("DYLN"),
         id: 1
     )
     private var eventHandler: EventHandlerRef?
     private var hotKeyRef: EventHotKeyRef?
+    private var activeShortcut: GlobalShortcut
+    private var isEnabled = true
 
-    init(onToggle: @escaping @MainActor () -> Void) {
+    init(
+        initialShortcut: GlobalShortcut,
+        registrar: HotKeyRegistering = CarbonHotKeyRegistrar(),
+        installHandler: Bool = true,
+        onToggle: @escaping @MainActor () -> Void
+    ) {
+        self.activeShortcut = initialShortcut.isValid ? initialShortcut : .defaultValue
+        self.registrar = registrar
         self.onToggle = onToggle
-        guard installEventHandler() else {
+
+        guard !installHandler || installEventHandler() else {
             return
         }
 
         registerHotKeyIfNeeded()
     }
 
+    @discardableResult
+    func applyShortcut(_ candidate: GlobalShortcut) -> HotKeyRegistrationResult {
+        guard candidate.isValid else {
+            return .failure(OSStatus(paramErr))
+        }
+
+        let previousShortcut = activeShortcut
+        let wasRegistered = hotKeyRef != nil
+
+        unregisterHotKeyIfNeeded()
+        activeShortcut = candidate
+
+        guard isEnabled else {
+            return .success
+        }
+
+        let result = registerHotKeyIfNeeded()
+        switch result {
+        case .success:
+            return .success
+        case let .failure(status):
+            activeShortcut = previousShortcut
+
+            if wasRegistered {
+                _ = registerHotKeyIfNeeded()
+            }
+
+            return .failure(status)
+        }
+    }
+
     // The menu controller disables the global hotkey while the status menu is open.
     func setEnabled(_ isEnabled: Bool) {
+        self.isEnabled = isEnabled
+
         if isEnabled {
-            registerHotKeyIfNeeded()
+            _ = registerHotKeyIfNeeded()
         } else {
             unregisterHotKeyIfNeeded()
         }
@@ -116,28 +172,25 @@ final class GlobalHotKeyController {
         return true
     }
 
-    private func registerHotKeyIfNeeded() {
-        guard hotKeyRef == nil else {
-            return
+    @discardableResult
+    private func registerHotKeyIfNeeded() -> HotKeyRegistrationResult {
+        guard isEnabled else {
+            return .success
         }
 
-        var hotKeyRef: EventHotKeyRef?
-        let hotKeyStatus = RegisterEventHotKey(
-            TrayMenuHotKey.carbonKeyCode,
-            TrayMenuHotKey.carbonModifierFlags,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
+        guard hotKeyRef == nil else {
+            return .success
+        }
 
-        guard hotKeyStatus == noErr else {
-            DaylineLog.error("Failed to register control-command-k hotkey: \(hotKeyStatus)")
-            return
+        let registration = registrar.register(shortcut: activeShortcut, hotKeyID: hotKeyID)
+        guard registration.status == noErr, let hotKeyRef = registration.hotKeyRef else {
+            DaylineLog.error("Failed to register global hotkey \(activeShortcut.displayTitle): \(registration.status)")
+            return .failure(registration.status)
         }
 
         self.hotKeyRef = hotKeyRef
-        DaylineLog.info("Registered global hotkey control-command-k")
+        DaylineLog.info("Registered global hotkey \(activeShortcut.displayTitle)")
+        return .success
     }
 
     private func unregisterHotKeyIfNeeded() {
@@ -145,9 +198,9 @@ final class GlobalHotKeyController {
             return
         }
 
-        UnregisterEventHotKey(hotKeyRef)
+        registrar.unregister(hotKeyRef)
         self.hotKeyRef = nil
-        DaylineLog.info("Unregistered global hotkey control-command-k")
+        DaylineLog.info("Unregistered global hotkey \(activeShortcut.displayTitle)")
     }
 
     private static func fourCharacterCode(_ string: String) -> OSType {

@@ -26,6 +26,7 @@
 		100000000000000000000010 /* DaylineLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000112 /* DaylineLog.swift */; };
 		100000000000000000000014 /* GlobalHotKeyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000114 /* GlobalHotKeyController.swift */; };
 		100000000000000000000016 /* CalendarPermissionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000115 /* CalendarPermissionController.swift */; };
+		100000000000000000000017 /* GlobalShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000116 /* GlobalShortcut.swift */; };
 		100000000000000000000011 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* EventKit.framework */; };
 		100000000000000000000012 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000202 /* SwiftUI.framework */; };
 		100000000000000000000015 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000203 /* Carbon.framework */; };
@@ -35,6 +36,8 @@
 		100000000000000000000024 /* CalendarAccessStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000124 /* CalendarAccessStateTests.swift */; };
 		100000000000000000000025 /* CalendarPermissionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000125 /* CalendarPermissionControllerTests.swift */; };
 		100000000000000000000026 /* SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000126 /* SettingsViewModelTests.swift */; };
+		100000000000000000000027 /* GlobalShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000127 /* GlobalShortcutTests.swift */; };
+		100000000000000000000028 /* GlobalHotKeyControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000128 /* GlobalHotKeyControllerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,12 +72,15 @@
 		100000000000000000000112 /* DaylineLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaylineLog.swift; sourceTree = "<group>"; };
 		100000000000000000000114 /* GlobalHotKeyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyController.swift; sourceTree = "<group>"; };
 		100000000000000000000115 /* CalendarPermissionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPermissionController.swift; sourceTree = "<group>"; };
+		100000000000000000000116 /* GlobalShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcut.swift; sourceTree = "<group>"; };
 		100000000000000000000121 /* MenuBarLabelFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelFormatterTests.swift; sourceTree = "<group>"; };
 		100000000000000000000122 /* MenuBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBuilderTests.swift; sourceTree = "<group>"; };
 		100000000000000000000123 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
 		100000000000000000000124 /* CalendarAccessStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarAccessStateTests.swift; sourceTree = "<group>"; };
 		100000000000000000000125 /* CalendarPermissionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPermissionControllerTests.swift; sourceTree = "<group>"; };
 		100000000000000000000126 /* SettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModelTests.swift; sourceTree = "<group>"; };
+		100000000000000000000127 /* GlobalShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutTests.swift; sourceTree = "<group>"; };
+		100000000000000000000128 /* GlobalHotKeyControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyControllerTests.swift; sourceTree = "<group>"; };
 		100000000000000000000201 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
 		100000000000000000000202 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		100000000000000000000203 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
@@ -138,6 +144,8 @@
 				100000000000000000000124 /* CalendarAccessStateTests.swift */,
 				100000000000000000000125 /* CalendarPermissionControllerTests.swift */,
 				100000000000000000000126 /* SettingsViewModelTests.swift */,
+				100000000000000000000127 /* GlobalShortcutTests.swift */,
+				100000000000000000000128 /* GlobalHotKeyControllerTests.swift */,
 			);
 			path = DaylineTests;
 			sourceTree = "<group>";
@@ -208,6 +216,7 @@
 			children = (
 				10000000000000000000010F /* DateFormatting.swift */,
 				100000000000000000000112 /* DaylineLog.swift */,
+				100000000000000000000116 /* GlobalShortcut.swift */,
 				100000000000000000000114 /* GlobalHotKeyController.swift */,
 			);
 			path = Utilities;
@@ -328,6 +337,7 @@
 				10000000000000000000000E /* SettingsView.swift in Sources */,
 				10000000000000000000000F /* DateFormatting.swift in Sources */,
 				100000000000000000000010 /* DaylineLog.swift in Sources */,
+				100000000000000000000017 /* GlobalShortcut.swift in Sources */,
 				100000000000000000000014 /* GlobalHotKeyController.swift in Sources */,
 				100000000000000000000016 /* CalendarPermissionController.swift in Sources */,
 			);
@@ -343,6 +353,8 @@
 				100000000000000000000024 /* CalendarAccessStateTests.swift in Sources */,
 				100000000000000000000025 /* CalendarPermissionControllerTests.swift in Sources */,
 				100000000000000000000026 /* SettingsViewModelTests.swift in Sources */,
+				100000000000000000000027 /* GlobalShortcutTests.swift in Sources */,
+				100000000000000000000028 /* GlobalHotKeyControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
