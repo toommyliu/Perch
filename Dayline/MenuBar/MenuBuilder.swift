@@ -14,6 +14,24 @@ struct CalendarMenuRow: Equatable {
     let isEnabled: Bool
     let color: NSColor?
     let action: CalendarMenuAction?
+    let keyEquivalent: String
+    let keyEquivalentModifierMask: NSEvent.ModifierFlags
+
+    init(
+        title: String,
+        isEnabled: Bool,
+        color: NSColor?,
+        action: CalendarMenuAction?,
+        keyEquivalent: String = "",
+        keyEquivalentModifierMask: NSEvent.ModifierFlags = []
+    ) {
+        self.title = title
+        self.isEnabled = isEnabled
+        self.color = color
+        self.action = action
+        self.keyEquivalent = keyEquivalent
+        self.keyEquivalentModifierMask = keyEquivalentModifierMask
+    }
 
     static func == (lhs: CalendarMenuRow, rhs: CalendarMenuRow) -> Bool {
         let colorsMatch: Bool
@@ -30,6 +48,8 @@ struct CalendarMenuRow: Equatable {
             && lhs.isEnabled == rhs.isEnabled
             && colorsMatch
             && lhs.action == rhs.action
+            && lhs.keyEquivalent == rhs.keyEquivalent
+            && lhs.keyEquivalentModifierMask == rhs.keyEquivalentModifierMask
     }
 }
 
@@ -107,8 +127,22 @@ struct MenuBuilder {
 
     private var standardFooterRows: [CalendarMenuRow] {
         [
-            CalendarMenuRow(title: "Open Calendar", isEnabled: true, color: nil, action: .openCalendar),
-            CalendarMenuRow(title: "Settings...", isEnabled: true, color: nil, action: .openSettings),
+            CalendarMenuRow(
+                title: "Open Calendar",
+                isEnabled: true,
+                color: nil,
+                action: .openCalendar,
+                keyEquivalent: "1",
+                keyEquivalentModifierMask: [.command]
+            ),
+            CalendarMenuRow(
+                title: "Settings...",
+                isEnabled: true,
+                color: nil,
+                action: .openSettings,
+                keyEquivalent: ",",
+                keyEquivalentModifierMask: [.command]
+            ),
             CalendarMenuRow(title: "Quit Dayline", isEnabled: true, color: nil, action: .quit)
         ]
     }
@@ -172,9 +206,10 @@ struct MenuBuilder {
     }
 
     private func menuItem(for row: CalendarMenuRow, target: AnyObject) -> NSMenuItem {
-        let item = NSMenuItem(title: row.title, action: selector(for: row.action), keyEquivalent: "")
+        let item = NSMenuItem(title: row.title, action: selector(for: row.action), keyEquivalent: row.keyEquivalent)
         item.isEnabled = row.isEnabled
         item.target = target
+        item.keyEquivalentModifierMask = row.keyEquivalentModifierMask
 
         if let color = row.color {
             item.image = MenuIconRenderer.colorBar(color: color, size: NSSize(width: 4, height: 14))

@@ -72,6 +72,18 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows[1].action, .openPrivacySettings)
     }
 
+    func testFooterRowsExposeMenuKeyEquivalents() {
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: [], now: Date(), calendar: calendar)
+
+        XCTAssertEqual(snapshot.footerRows[0].title, "Open Calendar")
+        XCTAssertEqual(snapshot.footerRows[0].keyEquivalent, "1")
+        XCTAssertEqual(snapshot.footerRows[0].keyEquivalentModifierMask, [.command])
+
+        XCTAssertEqual(snapshot.footerRows[1].title, "Settings...")
+        XCTAssertEqual(snapshot.footerRows[1].keyEquivalent, ",")
+        XCTAssertEqual(snapshot.footerRows[1].keyEquivalentModifierMask, [.command])
+    }
+
     private func event(title: String, start: Date, end: Date) -> CalendarEvent {
         CalendarEvent(
             id: UUID().uuidString,
