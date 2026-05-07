@@ -55,6 +55,23 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows[0].title, "All day · Conference")
     }
 
+    func testEventRowsUseWhiteColorWhenCalendarColorsAreDisabled() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let events = [
+            event(title: "Today Event", start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
+        ]
+
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: events,
+            showEventColors: false,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.sections[0].rows[0].color, .white)
+    }
+
     func testEmptyAuthorizedStateShowsNoUpcomingEvents() {
         let snapshot = builder.snapshot(accessState: .fullAccess, events: [], now: Date(), calendar: calendar)
 

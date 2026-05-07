@@ -18,6 +18,14 @@ final class SettingsViewModel: ObservableObject {
             onChange()
         }
     }
+
+    @Published var showEventColors: Bool {
+        didSet {
+            settingsStore.updateShowEventColors(showEventColors)
+            onChange()
+        }
+    }
+
     @Published private(set) var accessState: CalendarAccessState
     @Published private(set) var isRequestingAccess = false
     @Published private(set) var globalShortcut: GlobalShortcut
@@ -40,6 +48,7 @@ final class SettingsViewModel: ObservableObject {
         let settings = settingsStore.settings
         self.selectedMode = settings.displayMode
         self.lookAheadDays = settings.lookAheadDays
+        self.showEventColors = settings.showEventColors
         self.globalShortcut = settings.globalShortcut
         self.accessState = permissionController.accessState
         self.onShortcutChangeRequested = onShortcutChangeRequested
@@ -179,6 +188,12 @@ struct SettingsView: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(width: 150)
+                }
+
+                GridRow {
+                    Text("Show calendar colors")
+                    Toggle("Show calendar colors", isOn: $model.showEventColors)
+                        .labelsHidden()
                 }
 
                 GridRow(alignment: .top) {

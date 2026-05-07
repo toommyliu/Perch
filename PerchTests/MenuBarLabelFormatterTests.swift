@@ -79,6 +79,20 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .dateIcon(day: 6))
     }
 
+    func testEventColorIsWhiteWhenCalendarColorsAreDisabled() {
+        let now = date(hour: 9, minute: 0)
+        let event = makeEvent(start: date(hour: 10, minute: 0), end: date(hour: 11, minute: 0))
+
+        let content = formatter.labelContent(
+            events: [event],
+            settings: CalendarMenubarSettings(displayMode: .within6Hours, lookAheadDays: 7, showEventColors: false),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(content, .event(title: "CMPE172", relativeText: "in 1h 0m", color: .white))
+    }
+
     func testOngoingTimedEventFormatsAsNow() {
         let now = date(hour: 9, minute: 30)
         let event = makeEvent(start: date(hour: 9, minute: 0), end: date(hour: 10, minute: 0))

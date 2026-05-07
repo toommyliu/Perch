@@ -13,7 +13,7 @@ final class SettingsWindowController: NSWindowController {
         self.permissionController = permissionController
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 285),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 320),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

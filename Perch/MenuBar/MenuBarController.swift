@@ -104,17 +104,19 @@ final class MenuBarController: NSObject {
             PerchLog.info("Status item set to date icon for day \(day)")
         case let .event(title, relativeText, color):
             statusItem.length = NSStatusItem.variableLength
-            button.image = MenuIconRenderer.colorBar(color: color)
-            button.title = " \(title) · \(relativeText)"
+            button.image = color.map { MenuIconRenderer.colorBar(color: $0) }
+            button.title = "\(color == nil ? "" : " ")\(title) · \(relativeText)"
             PerchLog.info("Status item set to event: \(title) · \(relativeText)")
         }
     }
 
     private func updateMenu(accessState: CalendarAccessState) {
+        let settings = settingsStore.settings
         let snapshot = menuBuilder.snapshot(
             accessState: accessState,
             events: events,
-            globalShortcut: settingsStore.settings.globalShortcut
+            globalShortcut: settings.globalShortcut,
+            showEventColors: settings.showEventColors
         )
         let menu = menuBuilder.makeMenu(from: snapshot, target: self)
         menu.delegate = self

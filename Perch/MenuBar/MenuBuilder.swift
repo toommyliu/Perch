@@ -125,6 +125,7 @@ struct MenuBuilder {
         accessState: CalendarAccessState,
         events: [CalendarEvent],
         globalShortcut: GlobalShortcut = .defaultValue,
+        showEventColors: Bool = true,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> CalendarMenuSnapshot {
@@ -156,7 +157,13 @@ struct MenuBuilder {
                 footerRows: standardFooterRows(globalShortcut: globalShortcut)
             )
         case .fullAccess:
-            return eventsSnapshot(events: events, globalShortcut: globalShortcut, now: now, calendar: calendar)
+            return eventsSnapshot(
+                events: events,
+                globalShortcut: globalShortcut,
+                showEventColors: showEventColors,
+                now: now,
+                calendar: calendar
+            )
         }
     }
 
@@ -221,6 +228,7 @@ struct MenuBuilder {
     private func eventsSnapshot(
         events: [CalendarEvent],
         globalShortcut: GlobalShortcut,
+        showEventColors: Bool,
         now: Date,
         calendar: Calendar
     ) -> CalendarMenuSnapshot {
@@ -263,7 +271,7 @@ struct MenuBuilder {
                     CalendarMenuRow(
                         title: rowTitle(for: event),
                         isEnabled: false,
-                        color: event.calendarColor,
+                        color: showEventColors ? event.calendarColor : .white,
                         action: nil
                     )
                 }

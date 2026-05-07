@@ -9,6 +9,7 @@ final class SettingsViewModelTests: XCTestCase {
         let settingsStore = SettingsStore(userDefaults: defaults)
         settingsStore.updateDisplayMode(.always)
         settingsStore.updateLookAheadDays(14)
+        settingsStore.updateShowEventColors(false)
         let shortcut = GlobalShortcut(keyEquivalent: "p", keyCode: 35, modifiers: [.option, .command])
         settingsStore.updateGlobalShortcut(shortcut)
         let provider = FakePermissionProvider(state: .writeOnly)
@@ -22,9 +23,28 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedMode, .always)
         XCTAssertEqual(model.lookAheadDays, 14)
+        XCTAssertFalse(model.showEventColors)
         XCTAssertEqual(model.globalShortcut, shortcut)
         XCTAssertEqual(model.accessState, .writeOnly)
         XCTAssertEqual(model.accessActionTitle, "Open Privacy Settings...")
+    }
+
+    func testChangingColorVisibilityPersistsAndNotifies() {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        var changeCount = 0
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController
+        ) {
+            changeCount += 1
+        }
+
+        model.showEventColors = false
+
+        XCTAssertFalse(settingsStore.settings.showEventColors)
+        XCTAssertEqual(changeCount, 1)
     }
 
     func testSuccessfulShortcutRecordingRegistersPersistsAndUpdatesState() {

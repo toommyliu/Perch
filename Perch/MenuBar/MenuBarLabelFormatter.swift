@@ -3,16 +3,26 @@ import Foundation
 
 enum MenuBarLabelContent: Equatable {
     case dateIcon(day: Int)
-    case event(title: String, relativeText: String, color: NSColor)
+    case event(title: String, relativeText: String, color: NSColor?)
 
     static func == (lhs: MenuBarLabelContent, rhs: MenuBarLabelContent) -> Bool {
         switch (lhs, rhs) {
         case let (.dateIcon(lhsDay), .dateIcon(rhsDay)):
             return lhsDay == rhsDay
         case let (.event(lhsTitle, lhsRelativeText, lhsColor), .event(rhsTitle, rhsRelativeText, rhsColor)):
+            let colorsMatch: Bool
+            switch (lhsColor, rhsColor) {
+            case let (lhsColor?, rhsColor?):
+                colorsMatch = lhsColor.isEqual(rhsColor)
+            case (nil, nil):
+                colorsMatch = true
+            default:
+                colorsMatch = false
+            }
+
             return lhsTitle == rhsTitle
                 && lhsRelativeText == rhsRelativeText
-                && lhsColor.isEqual(rhsColor)
+                && colorsMatch
         default:
             return false
         }
@@ -43,7 +53,7 @@ struct MenuBarLabelFormatter {
         return .event(
             title: truncatedTitle(nextEvent.title),
             relativeText: relativeText(for: nextEvent, mode: settings.displayMode, now: now, calendar: calendar),
-            color: nextEvent.calendarColor
+            color: settings.showEventColors ? nextEvent.calendarColor : .white
         )
     }
 
