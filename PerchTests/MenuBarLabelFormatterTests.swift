@@ -79,7 +79,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .dateIcon(day: 6))
     }
 
-    func testEventColorIsWhiteWhenCalendarColorsAreDisabled() {
+    func testEventColorIsMutedWhiteWhenCalendarColorsAreDisabled() {
         let now = date(hour: 9, minute: 0)
         let event = makeEvent(start: date(hour: 10, minute: 0), end: date(hour: 11, minute: 0))
 
@@ -90,7 +90,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(content, .event(title: "CMPE172", relativeText: "in 1h 0m", color: .white))
+        XCTAssertEqual(content, .event(title: "CMPE172", relativeText: "in 1h 0m", color: .perchMutedWhite))
     }
 
     func testOngoingTimedEventFormatsAsNow() {

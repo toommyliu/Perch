@@ -1,6 +1,10 @@
 import AppKit
 import Foundation
 
+extension NSColor {
+    static let perchMutedWhite = NSColor(calibratedRed: 221.0 / 255.0, green: 227.0 / 255.0, blue: 231.0 / 255.0, alpha: 1)
+}
+
 enum MenuIconRenderer {
     static func dateIcon(day: Int) -> NSImage {
         let size = NSSize(width: 26, height: 22)
@@ -17,7 +21,7 @@ enum MenuIconRenderer {
 
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),
-            .foregroundColor: NSColor.white,
+            .foregroundColor: NSColor.perchMutedWhite,
             .paragraphStyle: paragraphStyle
         ]
 

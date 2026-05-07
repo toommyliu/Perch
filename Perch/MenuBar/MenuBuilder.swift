@@ -266,7 +266,7 @@ struct MenuBuilder {
                     CalendarMenuRow(
                         title: rowTitle(for: event),
                         isEnabled: false,
-                        color: showEventColors ? event.calendarColor : .white,
+                        color: showEventColors ? event.calendarColor : .perchMutedWhite,
                         action: nil
                     )
                 }

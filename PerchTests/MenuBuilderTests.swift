@@ -81,7 +81,7 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows.map(\.title), ["10:00 AM · Timed"])
     }
 
-    func testEventRowsUseWhiteColorWhenCalendarColorsAreDisabled() {
+    func testEventRowsUseMutedWhiteColorWhenCalendarColorsAreDisabled() {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
             event(title: "Today Event", start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
@@ -95,7 +95,7 @@ final class MenuBuilderTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(snapshot.sections[0].rows[0].color, .white)
+        XCTAssertEqual(snapshot.sections[0].rows[0].color, .perchMutedWhite)
     }
 
     func testEmptyAuthorizedStateShowsNoUpcomingEvents() {

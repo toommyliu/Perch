@@ -57,7 +57,7 @@ struct MenuBarLabelFormatter {
         return .event(
             title: truncatedTitle(nextEvent.title),
             relativeText: relativeText(for: nextEvent, mode: settings.displayMode, now: now, calendar: calendar),
-            color: settings.showEventColors ? nextEvent.calendarColor : .white
+            color: settings.showEventColors ? nextEvent.calendarColor : .perchMutedWhite
         )
     }
 
