@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build unsigned release
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Print toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Build unsigned app
+        run: |
+          DERIVED_DATA="$RUNNER_TEMP/DerivedData"
+
+          xcodebuild build \
+            -project Perch.xcodeproj \
+            -scheme Perch \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO
+
+          mkdir -p dist
+          ditto -c -k --keepParent \
+            "$DERIVED_DATA/Build/Products/Release/Perch.app" \
+            "dist/Perch-${GITHUB_REF_NAME}.unsigned.zip"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Perch-${{ github.ref_name }}.unsigned
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Create draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          files: dist/*.zip
