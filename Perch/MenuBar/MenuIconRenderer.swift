@@ -7,7 +7,7 @@ extension NSColor {
 
 enum MenuIconRenderer {
     static func dateIcon(day: Int) -> NSImage {
-        let size = NSSize(width: 25, height: 20)
+        let size = NSSize(width: 22, height: 18)
         let image = NSImage(size: size)
 
         image.lockFocus()
@@ -16,32 +16,32 @@ enum MenuIconRenderer {
         primaryColor.setStroke()
         primaryColor.setFill()
 
-        let calendarRect = NSRect(x: 3.25, y: 2.25, width: 18.5, height: 15.0)
-        let calendarPath = NSBezierPath(roundedRect: calendarRect, xRadius: 3.25, yRadius: 3.25)
-        calendarPath.lineWidth = 1.6
+        let calendarRect = NSRect(x: 3.5, y: 2.5, width: 15.0, height: 13.0)
+        let calendarPath = NSBezierPath(roundedRect: calendarRect, xRadius: 2.5, yRadius: 2.5)
+        calendarPath.lineWidth = 1.2
         calendarPath.stroke()
 
         let headerPath = NSBezierPath()
-        headerPath.lineWidth = 1.35
+        headerPath.lineWidth = 1.1
         headerPath.lineCapStyle = .round
-        headerPath.move(to: NSPoint(x: 5.6, y: 13.2))
-        headerPath.line(to: NSPoint(x: 19.4, y: 13.2))
+        headerPath.move(to: NSPoint(x: 5.5, y: 12.5))
+        headerPath.line(to: NSPoint(x: 16.5, y: 12.5))
         headerPath.stroke()
 
-        NSBezierPath(ovalIn: NSRect(x: 7.2, y: 15.45, width: 2.0, height: 2.0)).fill()
-        NSBezierPath(ovalIn: NSRect(x: 15.8, y: 15.45, width: 2.0, height: 2.0)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 7.0, y: 14.5, width: 1.5, height: 1.5)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 13.5, y: 14.5, width: 1.5, height: 1.5)).fill()
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: day < 10 ? 10.5 : 9.8, weight: .semibold),
+            .font: NSFont.monospacedDigitSystemFont(ofSize: day < 10 ? 9.8 : 9.0, weight: .semibold),
             .foregroundColor: primaryColor,
             .paragraphStyle: paragraphStyle
         ]
 
         String(day).draw(
-            in: NSRect(x: 3.5, y: 4.0, width: 18.0, height: 10.5),
+            in: NSRect(x: 3.5, y: 3.5, width: 15.0, height: 9.5),
             withAttributes: attributes
         )
 
