@@ -50,6 +50,14 @@ final class ZoomMeetingLinkExtractorTests: XCTestCase {
         XCTAssertEqual(launchURL.absoluteString, "zoommtg://us02web.zoom.us/join?action=join&confno=professor&pwd=abc")
     }
 
+    func testKeepsLookingForMeetingIdentifierAfterEmptySegment() {
+        let launchURL = launchURLBuilder.launchURL(
+            for: URL(string: "https://school.zoom.us/other/j//w/1234?pwd=abc")!
+        )
+
+        XCTAssertEqual(launchURL.absoluteString, "zoommtg://school.zoom.us/join?action=join&confno=1234&pwd=abc")
+    }
+
     func testKeepsNativeZoomLaunchURLUnchanged() {
         let url = URL(string: "zoommtg://zoom.us/join?action=join&confno=1234567890&pwd=abc")!
 

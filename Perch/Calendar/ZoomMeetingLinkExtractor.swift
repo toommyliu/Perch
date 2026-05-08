@@ -87,7 +87,7 @@ struct ZoomMeetingLaunchURLBuilder {
     }
 
     private static func meetingIdentifier(from url: URL) -> String? {
-        let pathSegments = url.path.split(separator: "/").map { segment in
+        let pathSegments = url.path.split(separator: "/", omittingEmptySubsequences: false).map { segment in
             String(segment).removingPercentEncoding ?? String(segment)
         }
 
@@ -99,7 +99,7 @@ struct ZoomMeetingLaunchURLBuilder {
 
             let nextIndex = index + 1
             guard pathSegments.indices.contains(nextIndex), !pathSegments[nextIndex].isEmpty else {
-                return nil
+                continue
             }
 
             return pathSegments[nextIndex]
