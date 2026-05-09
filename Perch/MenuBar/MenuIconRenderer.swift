@@ -9,10 +9,16 @@ extension NSColor {
 enum MenuIconRenderer {
     static func dateIcon(day: Int) -> NSImage {
         let size = NSSize(width: 22, height: 19)
-        let image = NSImage(size: size)
+        let image = NSImage(size: size, flipped: false) { _ in
+            drawDateIcon(day: day)
+            return true
+        }
 
-        image.lockFocus()
+        image.isTemplate = true
+        return image
+    }
 
+    private static func drawDateIcon(day: Int) {
         let primaryColor = NSColor.black
         primaryColor.setStroke()
         primaryColor.setFill()
@@ -28,53 +34,53 @@ enum MenuIconRenderer {
 
         calendarPath.stroke()
 
+        let textRect = NSRect(x: 3.5, y: 2.15, width: 15.0, height: 10.9)
+        drawDateText(day: day, color: primaryColor, in: textRect)
+    }
+
+    private static func drawDateText(day: Int, color: NSColor, in rect: NSRect) {
+        let font = NSFont.monospacedDigitSystemFont(
+            ofSize: day < 10 ? 10.2 : 9.2,
+            weight: .bold
+        )
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: day < 10 ? 9.6 : 8.1, weight: .bold),
-            .foregroundColor: primaryColor
+            .font: font,
+            .foregroundColor: color
         ]
         let dayString = NSAttributedString(string: String(day), attributes: attributes)
-        let textRect = NSRect(x: 3.5, y: 2.3, width: 15.0, height: 10.6)
-        drawCentered(dayString, in: textRect, offset: dayTextOffset(for: day))
-
-        image.unlockFocus()
-        image.isTemplate = true
-        return image
+        drawTypographicallyCentered(dayString, in: rect)
     }
 
-    private static func dayTextOffset(for day: Int) -> NSSize {
-        let dayText = String(day)
-
-        if dayText.contains("1") {
-            return NSSize(width: day < 10 ? 0.05 : 0.0, height: day < 10 ? 0.3 : 0.0)
-        }
-
-        return day < 10 ? NSSize(width: 0.45, height: 0.3) : NSSize(width: 0.25, height: 0.0)
-    }
-
-    private static func drawCentered(_ attributedString: NSAttributedString, in rect: NSRect, offset: NSSize = .zero) {
+    private static func drawTypographicallyCentered(_ attributedString: NSAttributedString, in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else {
             attributedString.draw(in: rect)
             return
         }
 
         let line = CTLineCreateWithAttributedString(attributedString)
-        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
 
-        guard bounds.width.isFinite,
-              bounds.height.isFinite,
-              bounds.width > 0,
-              bounds.height > 0
+        guard width.isFinite,
+              ascent.isFinite,
+              descent.isFinite,
+              width > 0,
+              ascent > 0
         else {
             attributedString.draw(in: rect)
             return
         }
 
+        let xOffset = CGFloat(CTLineGetPenOffsetForFlush(line, 0.5, Double(rect.width)))
+        let baselineY = rect.midY - ((ascent - descent) / 2)
+
         context.saveGState()
+        context.setShouldAntialias(true)
+        context.setShouldSmoothFonts(true)
         context.textMatrix = .identity
-        context.textPosition = CGPoint(
-            x: rect.midX - bounds.midX + offset.width,
-            y: rect.midY - bounds.midY + offset.height
-        )
+        context.textPosition = CGPoint(x: rect.minX + xOffset, y: baselineY)
         CTLineDraw(line, context)
         context.restoreGState()
     }
