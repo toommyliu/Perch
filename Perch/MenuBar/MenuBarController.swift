@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class MenuBarController: NSObject {
+    private static let dateIconStatusItemLength: CGFloat = 16
+
     private let statusItem: NSStatusItem
     private let calendarProvider: CalendarEventProviding
     private let permissionController: CalendarPermissionController
@@ -154,7 +156,7 @@ final class MenuBarController: NSObject {
             return
         }
 
-        statusItem.length = 32
+        statusItem.length = Self.dateIconStatusItemLength
         button.imagePosition = .imageOnly
         button.title = ""
         #if DEBUG
