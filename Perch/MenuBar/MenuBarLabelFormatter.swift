@@ -55,7 +55,7 @@ struct MenuBarLabelFormatter {
         }
 
         return .event(
-            title: truncatedTitle(nextEvent.title),
+            title: EventTitleTruncator.truncate(nextEvent.title, maxLength: maxTitleLength),
             relativeText: relativeText(for: nextEvent, mode: settings.displayMode, now: now, calendar: calendar),
             color: settings.showEventColors ? nextEvent.calendarColor : .perchMutedWhite
         )
@@ -126,12 +126,4 @@ struct MenuBarLabelFormatter {
         return "\(hours)h \(minutes)m"
     }
 
-    private func truncatedTitle(_ title: String) -> String {
-        guard title.count > maxTitleLength else {
-            return title
-        }
-
-        let endIndex = title.index(title.startIndex, offsetBy: maxTitleLength - 1)
-        return "\(title[..<endIndex])..."
-    }
 }

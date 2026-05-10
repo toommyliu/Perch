@@ -18,6 +18,7 @@ enum CalendarMenuIcon: Equatable {
 
 struct CalendarMenuRow: Equatable {
     let title: String
+    let toolTip: String?
     let isEnabled: Bool
     let color: NSColor?
     let icon: CalendarMenuIcon?
@@ -32,6 +33,7 @@ struct CalendarMenuRow: Equatable {
 
     init(
         title: String,
+        toolTip: String? = nil,
         isEnabled: Bool,
         color: NSColor?,
         icon: CalendarMenuIcon? = nil,
@@ -45,6 +47,7 @@ struct CalendarMenuRow: Equatable {
         submenuRows: [CalendarMenuRow] = []
     ) {
         self.title = title
+        self.toolTip = toolTip
         self.isEnabled = isEnabled
         self.color = color
         self.icon = icon
@@ -74,6 +77,7 @@ struct CalendarMenuRow: Equatable {
         }
 
         return lhs.title == rhs.title
+            && lhs.toolTip == rhs.toolTip
             && lhs.isEnabled == rhs.isEnabled
             && colorsMatch
             && lhs.icon == rhs.icon
@@ -147,6 +151,8 @@ private extension NSMenuItem {
 }
 
 struct MenuBuilder {
+    private let maxEventTitleLength = 48
+
     func snapshot(
         accessState: CalendarAccessState,
         events: [CalendarEvent],
@@ -302,8 +308,12 @@ struct MenuBuilder {
 
     private func rows(for event: CalendarEvent, showEventColors: Bool) -> [CalendarMenuRow] {
         let openEventAction = CalendarMenuAction.openEvent(eventIdentifier: event.id, startDate: event.startDate)
+        let rowTitle = rowTitle(for: event)
+        let fullRowTitle = fullRowTitle(for: event)
+        let rowToolTip = rowTitle == fullRowTitle ? nil : fullRowTitle
         let eventRow = CalendarMenuRow(
-            title: rowTitle(for: event),
+            title: rowTitle,
+            toolTip: rowToolTip,
             isEnabled: true,
             color: showEventColors ? event.calendarColor : .perchMutedWhite,
             action: openEventAction
@@ -314,7 +324,8 @@ struct MenuBuilder {
         }
 
         let zoomEventRow = CalendarMenuRow(
-            title: rowTitle(for: event),
+            title: rowTitle,
+            toolTip: rowToolTip,
             isEnabled: true,
             color: showEventColors ? event.calendarColor : .perchMutedWhite,
             action: nil,
@@ -370,11 +381,20 @@ struct MenuBuilder {
     }
 
     private func rowTitle(for event: CalendarEvent) -> String {
+        let title = EventTitleTruncator.truncate(event.title, maxLength: maxEventTitleLength)
+        return fullRowTitle(for: event, title: title)
+    }
+
+    private func fullRowTitle(for event: CalendarEvent) -> String {
+        fullRowTitle(for: event, title: event.title)
+    }
+
+    private func fullRowTitle(for event: CalendarEvent, title: String) -> String {
         if event.isAllDay {
-            return "All day · \(event.title)"
+            return "All day · \(title)"
         }
 
-        return "\(DateFormatting.eventTime(event.startDate)) · \(event.title)"
+        return "\(DateFormatting.eventTime(event.startDate)) · \(title)"
     }
 
     private func menuItem(for row: CalendarMenuRow, target: AnyObject) -> NSMenuItem {
@@ -390,6 +410,7 @@ struct MenuBuilder {
         item.allowsKeyEquivalentWhenHidden = row.allowsKeyEquivalentWhenHidden
         item.state = row.isSelected ? .on : .off
         item.representedObject = row.action
+        item.toolTip = row.toolTip
 
         if let icon = row.icon {
             item.image = image(for: icon)

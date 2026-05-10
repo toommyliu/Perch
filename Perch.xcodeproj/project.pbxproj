@@ -31,6 +31,7 @@
 		100000000000000000000019 /* CalendarEventOpenURLBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000118 /* CalendarEventOpenURLBuilder.swift */; };
 		10000000000000000000001A /* ZoomMeetingLinkExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* ZoomMeetingLinkExtractor.swift */; };
 		10000000000000000000001B /* DateIconDebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011B /* DateIconDebugSettings.swift */; };
+		10000000000000000000001C /* EventTitleTruncator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011C /* EventTitleTruncator.swift */; };
 		100000000000000000000011 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* EventKit.framework */; };
 		100000000000000000000012 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000202 /* SwiftUI.framework */; };
 		100000000000000000000015 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000203 /* Carbon.framework */; };
@@ -84,6 +85,7 @@
 		100000000000000000000118 /* CalendarEventOpenURLBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventOpenURLBuilder.swift; sourceTree = "<group>"; };
 		100000000000000000000119 /* ZoomMeetingLinkExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomMeetingLinkExtractor.swift; sourceTree = "<group>"; };
 		10000000000000000000011B /* DateIconDebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateIconDebugSettings.swift; sourceTree = "<group>"; };
+		10000000000000000000011C /* EventTitleTruncator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTitleTruncator.swift; sourceTree = "<group>"; };
 		100000000000000000000121 /* MenuBarLabelFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelFormatterTests.swift; sourceTree = "<group>"; };
 		100000000000000000000122 /* MenuBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBuilderTests.swift; sourceTree = "<group>"; };
 		100000000000000000000123 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 				10000000000000000000010A /* MenuBarLabelFormatter.swift */,
 				10000000000000000000010B /* MenuIconRenderer.swift */,
 				10000000000000000000011B /* DateIconDebugSettings.swift */,
+				10000000000000000000011C /* EventTitleTruncator.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -363,6 +366,7 @@
 				100000000000000000000019 /* CalendarEventOpenURLBuilder.swift in Sources */,
 				10000000000000000000001A /* ZoomMeetingLinkExtractor.swift in Sources */,
 				10000000000000000000001B /* DateIconDebugSettings.swift in Sources */,
+				10000000000000000000001C /* EventTitleTruncator.swift in Sources */,
 				100000000000000000000014 /* GlobalHotKeyController.swift in Sources */,
 				100000000000000000000016 /* CalendarPermissionController.swift in Sources */,
 			);

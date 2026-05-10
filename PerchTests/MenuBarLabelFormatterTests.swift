@@ -225,7 +225,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
 
         XCTAssertEqual(
             content,
-            .event(title: "Extremely Long Calendar Eve...", relativeText: "in 1h 0m", color: .systemBlue)
+            .event(title: "Extremely Long Calendar E...", relativeText: "in 1h 0m", color: .systemBlue)
         )
     }
 

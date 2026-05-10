@@ -55,6 +55,40 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows[0].title, "All day · Conference")
     }
 
+    func testLongTimedEventTitleTruncatesNameButKeepsTimePrefix() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let longTitle = "12345678901234567890123456789012345678901234567890"
+        let events = [
+            event(title: longTitle, start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
+        ]
+
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: events, now: now, calendar: calendar)
+
+        XCTAssertEqual(snapshot.sections[0].rows[0].title, "10:00 AM · 123456789012345678901234567890123456789012345...")
+        XCTAssertEqual(snapshot.sections[0].rows[0].toolTip, "10:00 AM · \(longTitle)")
+    }
+
+    func testLongAllDayEventTitleTruncatesNameButKeepsAllDayPrefix() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let longTitle = "12345678901234567890123456789012345678901234567890"
+        let events = [
+            CalendarEvent(
+                id: "all-day",
+                title: longTitle,
+                startDate: date(day: 6, hour: 0, minute: 0),
+                endDate: date(day: 7, hour: 0, minute: 0),
+                isAllDay: true,
+                calendarTitle: "School",
+                calendarColor: .systemRed
+            )
+        ]
+
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: events, now: now, calendar: calendar)
+
+        XCTAssertEqual(snapshot.sections[0].rows[0].title, "All day · 123456789012345678901234567890123456789012345...")
+        XCTAssertEqual(snapshot.sections[0].rows[0].toolTip, "All day · \(longTitle)")
+    }
+
     func testAllDayRowsAreExcludedWhenDisabled() {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
@@ -272,6 +306,19 @@ final class MenuBuilderTests: XCTestCase {
         menu.performActionForItem(at: 1)
 
         XCTAssertEqual(target.openCalendarEventCount, 1)
+    }
+
+    @MainActor
+    func testMenuItemUsesRowTooltip() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let longTitle = "12345678901234567890123456789012345678901234567890"
+        let events = [
+            event(title: longTitle, start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
+        ]
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: events, now: now, calendar: calendar)
+        let menu = builder.makeMenu(from: snapshot, target: MenuShortcutTarget())
+
+        XCTAssertEqual(menu.item(at: 1)?.toolTip, "10:00 AM · \(longTitle)")
     }
 
     @MainActor
