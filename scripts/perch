@@ -4,6 +4,9 @@ set -euo pipefail
 PROJECT="Perch.xcodeproj"
 SCHEME="Perch"
 APP_NAME="Perch"
+PRODUCTION_BUNDLE_ID="com.app.perch"
+DEVELOPMENT_BUNDLE_ID="com.app.perch.dev"
+ARTIFACT_BUILD_BUNDLE_ID="com.app.perch.build"
 DERIVED_DATA_PATH="build/DerivedData"
 ARTIFACTS_DIR="build/artifacts"
 
@@ -37,21 +40,27 @@ require_xcodebuild() {
 
 build_app() {
   local configuration="$1"
+  local bundle_identifier="${2:-$PRODUCTION_BUNDLE_ID}"
+
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration "$configuration" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    "PRODUCT_BUNDLE_IDENTIFIER=$bundle_identifier" \
     build
 }
 
 clean_build_app() {
   local configuration="$1"
+  local bundle_identifier="${2:-$PRODUCTION_BUNDLE_ID}"
+
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration "$configuration" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
+    "PRODUCT_BUNDLE_IDENTIFIER=$bundle_identifier" \
     clean build
 }
 
@@ -67,10 +76,56 @@ launch_app() {
     exit 1
   fi
 
-  # Ensure the newly built bundle is launched instead of reusing any existing instance.
-  osascript -e 'tell application "Perch" to quit' >/dev/null 2>&1 || true
+  # Quit only an already-running copy from this build path. Quitting by app
+  # display name can terminate /Applications/Perch.app instead.
+  quit_app_at_path "$app"
+  warn_if_other_perch_instance_is_running
   open -n "$app"
   echo "Launched $app"
+}
+
+escape_extended_regex() {
+  printf '%s' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+quit_app_at_path() {
+  local app="$1"
+  local executable="$app/Contents/MacOS/$APP_NAME"
+  local escaped_executable pattern
+
+  if [[ ! -x "$executable" ]]; then
+    return
+  fi
+
+  escaped_executable="$(escape_extended_regex "$executable")"
+  pattern="^$escaped_executable([[:space:]]|$)"
+
+  if ! pgrep -f "$pattern" >/dev/null 2>&1; then
+    return
+  fi
+
+  pkill -TERM -f "$pattern" >/dev/null 2>&1 || true
+
+  for _ in {1..50}; do
+    if ! pgrep -f "$pattern" >/dev/null 2>&1; then
+      return
+    fi
+
+    sleep 0.1
+  done
+
+  echo "warning: existing app at $app did not exit; the new launch may reuse or ignore it" >&2
+}
+
+warn_if_other_perch_instance_is_running() {
+  local escaped_app_name pattern
+
+  escaped_app_name="$(escape_extended_regex "$APP_NAME")"
+  pattern="/$escaped_app_name\\.app/Contents/MacOS/$escaped_app_name([[:space:]]|$)"
+
+  if pgrep -f "$pattern" >/dev/null 2>&1; then
+    echo "warning: another Perch instance is still running; the built app may exit because Perch uses a single-instance lock" >&2
+  fi
 }
 
 bundle_value() {
@@ -83,7 +138,7 @@ create_artifact() {
   local app="$1"
   mkdir -p "$ARTIFACTS_DIR"
 
-  local version build timestamp artifact
+  local version build timestamp artifact staging_dir artifact_app
   version="$(bundle_value "$app" CFBundleShortVersionString)"
   build="$(bundle_value "$app" CFBundleVersion)"
   timestamp="$(date +%Y%m%d-%H%M%S)"
@@ -91,9 +146,28 @@ create_artifact() {
   [[ -n "$version" ]] || version="0.0"
   [[ -n "$build" ]] || build="0"
 
+  staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/perch-artifact.XXXXXX")"
+  artifact_app="$staging_dir/$APP_NAME.app"
+  ditto "$app" "$artifact_app"
+  prepare_production_artifact_app "$artifact_app"
+
   artifact="$ARTIFACTS_DIR/$APP_NAME-$version-$build-$timestamp.zip"
-  ditto -c -k --keepParent "$app" "$artifact"
+  ditto -c -k --keepParent "$artifact_app" "$artifact"
   echo "Created $artifact"
+  echo "Artifact bundle id: $(bundle_value "$artifact_app" CFBundleIdentifier)"
+}
+
+prepare_production_artifact_app() {
+  local app="$1"
+
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCTION_BUNDLE_ID" "$app/Contents/Info.plist"
+  codesign \
+    --force \
+    --sign - \
+    --options runtime \
+    --entitlements "Perch/Perch.entitlements" \
+    --timestamp=none \
+    "$app"
 }
 
 main() {
@@ -102,15 +176,15 @@ main() {
 
   case "${1:-help}" in
     debug)
-      build_app Debug
+      build_app Debug "$DEVELOPMENT_BUNDLE_ID"
       launch_app "$(app_path Debug)"
       ;;
     release)
-      build_app Release
+      build_app Release "$DEVELOPMENT_BUNDLE_ID"
       launch_app "$(app_path Release)"
       ;;
     artifact)
-      clean_build_app Release
+      clean_build_app Release "$ARTIFACT_BUILD_BUNDLE_ID"
       create_artifact "$(app_path Release)"
       ;;
     help|-h|--help)
