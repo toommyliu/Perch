@@ -11,9 +11,9 @@ if let singleInstanceLock {
         PerchLog.info("Another Perch instance is already running; exiting duplicate instance")
         exit(EXIT_SUCCESS)
     case let .unavailable(message):
-        // Failing open is safer than making the app unavailable because of a
-        // temporary filesystem issue. Launch Services still prevents normal
-        // double-click/open duplicate launches; this lock covers forced launches.
+        exitIfAnotherInstanceIsRunning()
+
+        // Failing open is safer than making the app unavailable because of a temporary filesystem issue.
         PerchLog.error("Could not acquire single-instance lock: \(message); continuing launch")
     }
 }
@@ -71,4 +71,23 @@ private func acquireSingleInstanceLock() -> SingleInstanceLockResult {
     }
 
     return .acquired(fileDescriptor: fileDescriptor)
+}
+
+private func exitIfAnotherInstanceIsRunning() {
+    guard isAnotherInstanceRunning() else {
+        return
+    }
+
+    PerchLog.info("Another Perch instance is already running; exiting duplicate instance")
+    exit(EXIT_SUCCESS)
+}
+
+private func isAnotherInstanceRunning() -> Bool {
+    guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
+        return false
+    }
+
+    let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+    return NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+        .contains { $0.processIdentifier != currentProcessIdentifier }
 }

@@ -14,10 +14,14 @@ final class MenuBarController: NSObject {
     private let menuBuilder = MenuBuilder()
     private let eventOpenURLBuilder = CalendarEventOpenURLBuilder()
     private let zoomMeetingLaunchURLBuilder = ZoomMeetingLaunchURLBuilder()
+    private lazy var refreshCoalescer = CalendarRefreshCoalescer { [weak self] in
+        await self?.refreshCalendarData()
+    }
     #if DEBUG
     private let dateIconDebugSettings: DateIconDebugSettings
     #endif
     private var events: [CalendarEvent] = []
+    private var statusItemPresentation: StatusItemPresentation?
     private var isTrayMenuOpen = false
     var onTrayMenuWillOpen: (() -> Void)?
     var onTrayMenuDidClose: (() -> Void)?
@@ -64,7 +68,7 @@ final class MenuBarController: NSObject {
         settingsWindowController.onSettingsChanged = { [weak self] in
             Task { @MainActor in
                 PerchLog.info("Settings changed; refreshing calendar data")
-                await self?.refreshCalendarData()
+                self?.refresh()
             }
         }
         configureStatusItem()
@@ -73,9 +77,7 @@ final class MenuBarController: NSObject {
     }
 
     func refresh() {
-        Task {
-            await refreshCalendarData()
-        }
+        refreshCoalescer.requestRefresh()
     }
 
     func refreshStatusItem() {
@@ -124,14 +126,16 @@ final class MenuBarController: NSObject {
     }
 
     private func updateStatusItem() {
-        guard let button = statusItem.button else {
+        guard statusItem.button != nil else {
             return
         }
 
         #if DEBUG
         if dateIconDebugSettings.isOverrideEnabled {
-            setDateIcon(day: dateIconDebugSettings.day)
-            PerchLog.info("Status item set to debug date icon for day \(dateIconDebugSettings.day)")
+            setStatusItemPresentation(
+                .dateIcon(day: dateIconDebugSettings.day, options: dateIconDebugSettings.renderOptions),
+                logMessage: "Status item set to debug date icon for day \(dateIconDebugSettings.day)"
+            )
             return
         }
         #endif
@@ -140,34 +144,62 @@ final class MenuBarController: NSObject {
 
         switch content {
         case let .dateIcon(day):
-            setDateIcon(day: day)
-            PerchLog.info("Status item set to date icon for day \(day)")
+            #if DEBUG
+            setStatusItemPresentation(.dateIcon(day: day, options: .defaultValue), logMessage: "Status item set to date icon for day \(day)")
+            #else
+            setStatusItemPresentation(.dateIcon(day: day), logMessage: "Status item set to date icon for day \(day)")
+            #endif
+        case let .event(title, relativeText, color):
+            setStatusItemPresentation(
+                .event(title: title, relativeText: relativeText, color: color),
+                logMessage: "Status item set to event: \(title) · \(relativeText)"
+            )
+        }
+    }
+
+    private func setStatusItemPresentation(_ presentation: StatusItemPresentation, logMessage: String) {
+        guard presentation != statusItemPresentation else {
+            return
+        }
+
+        statusItemPresentation = presentation
+        guard let button = statusItem.button else {
+            return
+        }
+
+        switch presentation {
+        #if DEBUG
+        case let .dateIcon(day, options):
+            setDateIcon(day: day, options: options, button: button)
+        #else
+        case let .dateIcon(day):
+            setDateIcon(day: day, button: button)
+        #endif
         case let .event(title, relativeText, color):
             statusItem.length = NSStatusItem.variableLength
             button.imagePosition = .imageLeading
             button.image = color.map { MenuIconRenderer.colorBar(color: $0) }
             button.title = "\(color == nil ? "" : " ")\(title) · \(relativeText)"
-            PerchLog.info("Status item set to event: \(title) · \(relativeText)")
         }
+
+        PerchLog.info(logMessage)
     }
 
-    private func setDateIcon(day: Int) {
-        guard let button = statusItem.button else {
-            return
-        }
-
+    #if DEBUG
+    private func setDateIcon(day: Int, options: DateIconRenderOptions, button: NSStatusBarButton) {
         statusItem.length = Self.dateIconStatusItemLength
         button.imagePosition = .imageOnly
         button.title = ""
-        #if DEBUG
-        let options = dateIconDebugSettings.isOverrideEnabled
-            ? dateIconDebugSettings.renderOptions
-            : .defaultValue
         button.image = MenuIconRenderer.dateIcon(day: day, options: options)
-        #else
-        button.image = MenuIconRenderer.dateIcon(day: day)
-        #endif
     }
+    #else
+    private func setDateIcon(day: Int, button: NSStatusBarButton) {
+        statusItem.length = Self.dateIconStatusItemLength
+        button.imagePosition = .imageOnly
+        button.title = ""
+        button.image = MenuIconRenderer.dateIcon(day: day)
+    }
+    #endif
 
     private func updateMenu(accessState: CalendarAccessState) {
         let settings = settingsStore.settings
@@ -207,9 +239,9 @@ final class MenuBarController: NSObject {
 
     @objc func requestCalendarAccess() {
         PerchLog.info("Calendar access requested from menu")
-        Task {
-            _ = await permissionController.requestFullAccess()
-            await refreshCalendarData()
+        Task { @MainActor in
+            _ = await self.permissionController.requestFullAccess()
+            self.refresh()
         }
     }
 
@@ -305,6 +337,44 @@ extension MenuBarController: NSMenuDelegate {
                     onTrayMenuDidClose?()
                 }
             }
+        }
+    }
+}
+
+private enum StatusItemPresentation: Equatable {
+    #if DEBUG
+    case dateIcon(day: Int, options: DateIconRenderOptions)
+    #else
+    case dateIcon(day: Int)
+    #endif
+    case event(title: String, relativeText: String, color: NSColor?)
+
+    static func == (lhs: StatusItemPresentation, rhs: StatusItemPresentation) -> Bool {
+        switch (lhs, rhs) {
+        #if DEBUG
+        case let (.dateIcon(lhsDay, lhsOptions), .dateIcon(rhsDay, rhsOptions)):
+            return lhsDay == rhsDay && lhsOptions == rhsOptions
+        #else
+        case let (.dateIcon(lhsDay), .dateIcon(rhsDay)):
+            return lhsDay == rhsDay
+        #endif
+        case let (.event(lhsTitle, lhsRelativeText, lhsColor), .event(rhsTitle, rhsRelativeText, rhsColor)):
+            return lhsTitle == rhsTitle
+                && lhsRelativeText == rhsRelativeText
+                && colorsAreEqual(lhsColor, rhsColor)
+        default:
+            return false
+        }
+    }
+
+    private static func colorsAreEqual(_ lhs: NSColor?, _ rhs: NSColor?) -> Bool {
+        switch (lhs, rhs) {
+        case (.none, .none):
+            return true
+        case let (.some(lhs), .some(rhs)):
+            return lhs.isEqual(rhs)
+        default:
+            return false
         }
     }
 }

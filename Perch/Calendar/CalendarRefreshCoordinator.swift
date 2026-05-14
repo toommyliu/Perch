@@ -48,3 +48,38 @@ final class CalendarRefreshCoordinator {
         stop()
     }
 }
+
+@MainActor
+final class CalendarRefreshCoalescer {
+    private let refresh: () async -> Void
+    private var isRefreshing = false
+    private var needsFollowUpRefresh = false
+
+    init(refresh: @escaping () async -> Void) {
+        self.refresh = refresh
+    }
+
+    func requestRefresh() {
+        if isRefreshing {
+            needsFollowUpRefresh = true
+            return
+        }
+
+        isRefreshing = true
+        Task { [weak self] in
+            await self?.runRefreshLoop()
+        }
+    }
+
+    private func runRefreshLoop() async {
+        while true {
+            needsFollowUpRefresh = false
+            await refresh()
+
+            guard needsFollowUpRefresh else {
+                isRefreshing = false
+                return
+            }
+        }
+    }
+}
