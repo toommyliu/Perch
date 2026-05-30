@@ -4,19 +4,27 @@ import Foundation
 
 final class CalendarRefreshCoordinator {
     private var timer: Timer?
-    private var observers: [NSObjectProtocol] = []
+    private var observers: [(center: NotificationCenter, observer: NSObjectProtocol)] = []
     private let refresh: () -> Void
+    private let now: () -> Date
+    private let calendar: Calendar
+    private let timerTolerance: TimeInterval
 
-    init(refresh: @escaping () -> Void) {
+    init(
+        calendar: Calendar = .current,
+        timerTolerance: TimeInterval = CalendarRefreshSchedule.defaultTimerTolerance,
+        now: @escaping () -> Date = Date.init,
+        refresh: @escaping () -> Void
+    ) {
+        self.calendar = calendar
+        self.timerTolerance = timerTolerance
+        self.now = now
         self.refresh = refresh
     }
 
     func start() {
         stop()
-
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            self?.refresh()
-        }
+        scheduleNextTimer(after: now())
 
         let notificationCenter = NotificationCenter.default
         observe(.EKEventStoreChanged, center: notificationCenter)
@@ -30,22 +38,54 @@ final class CalendarRefreshCoordinator {
         timer = nil
 
         for observer in observers {
-            NotificationCenter.default.removeObserver(observer)
-            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            observer.center.removeObserver(observer.observer)
         }
 
         observers.removeAll()
     }
 
+    private func scheduleNextTimer(after date: Date) {
+        timer?.invalidate()
+
+        let timer = Timer(fire: CalendarRefreshSchedule.nextRefreshDate(after: date, calendar: calendar), interval: 0, repeats: false) { [weak self] _ in
+            self?.timerDidFire()
+        }
+        timer.tolerance = timerTolerance
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    private func timerDidFire() {
+        refresh()
+        scheduleNextTimer(after: now())
+    }
+
     private func observe(_ name: Notification.Name, center: NotificationCenter) {
         let observer = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-            self?.refresh()
+            self?.timerDidFire()
         }
-        observers.append(observer)
+        observers.append((center, observer))
     }
 
     deinit {
         stop()
+    }
+}
+
+enum CalendarRefreshSchedule {
+    static let defaultTimerTolerance: TimeInterval = 1
+
+    static func nextRefreshDate(after date: Date, calendar: Calendar = .current) -> Date {
+        guard let minuteInterval = calendar.dateInterval(of: .minute, for: date) else {
+            return date.addingTimeInterval(60)
+        }
+
+        let nextMinute = minuteInterval.end
+        guard nextMinute > date else {
+            return date.addingTimeInterval(60)
+        }
+
+        return nextMinute
     }
 }
 
