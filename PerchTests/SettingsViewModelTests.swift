@@ -75,13 +75,45 @@ final class SettingsViewModelTests: XCTestCase {
         await waitForAsyncModelUpdate {
             model.availableCalendars.count == 2
         }
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
+
         model.setCalendar(holidayCalendar, isSelected: false)
+        await Task.yield()
 
         XCTAssertEqual(model.selectedCalendarIdentifiers, ["work"])
         XCTAssertEqual(settingsStore.settings.selectedCalendarIdentifiers, ["work"])
         XCTAssertTrue(model.isCalendarSelected(workCalendar))
         XCTAssertFalse(model.isCalendarSelected(holidayCalendar))
         XCTAssertEqual(changeCount, 1)
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
+    }
+
+    func testTogglingCalendarDoesNotReloadCalendarsWhenSettingsRefreshPermissionStatus() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        let workCalendar = CalendarInfo(id: "work", title: "Work", sourceTitle: "iCloud", color: .systemBlue)
+        let holidayCalendar = CalendarInfo(id: "holidays", title: "US Holidays", sourceTitle: "Subscribed", color: .systemRed)
+        let calendarProvider = FakeCalendarEventProvider(calendars: [workCalendar, holidayCalendar])
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            calendarProvider: calendarProvider
+        ) {
+            permissionController.refreshStatus()
+        }
+
+        await waitForAsyncModelUpdate {
+            model.availableCalendars.count == 2
+        }
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
+
+        model.setCalendar(holidayCalendar, isSelected: false)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
+        XCTAssertFalse(model.isLoadingCalendars)
     }
 
     func testSelectingNoCalendarsPersistsExplicitEmptySelection() {
@@ -338,10 +370,14 @@ final class SettingsViewModelTests: XCTestCase {
         let settingsStore = SettingsStore(userDefaults: makeDefaults())
         let provider = FakePermissionProvider(state: .notDetermined, requestResult: .fullAccess)
         let permissionController = CalendarPermissionController(permissionProvider: provider)
+        let calendarProvider = FakeCalendarEventProvider(calendars: [
+            CalendarInfo(id: "work", title: "Work", sourceTitle: "iCloud", color: .systemBlue)
+        ])
         var changeCount = 0
         let model = SettingsViewModel(
             settingsStore: settingsStore,
-            permissionController: permissionController
+            permissionController: permissionController,
+            calendarProvider: calendarProvider
         ) {
             changeCount += 1
         }
@@ -355,6 +391,12 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(model.isRequestingAccess)
         XCTAssertEqual(provider.requestCount, 1)
         XCTAssertEqual(changeCount, 1)
+
+        await waitForAsyncModelUpdate {
+            model.availableCalendars.count == 1
+        }
+
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
     }
 
     func testPrivacySettingsActionInvokesURLOpener() {
@@ -535,13 +577,15 @@ private enum FakeLoginItemError: Error {
 
 private final class FakeCalendarEventProvider: CalendarEventProviding {
     let calendars: [CalendarInfo]
+    private(set) var availableCalendarsCallCount = 0
 
     init(calendars: [CalendarInfo] = []) {
         self.calendars = calendars
     }
 
     func availableCalendars() async throws -> [CalendarInfo] {
-        calendars
+        availableCalendarsCallCount += 1
+        return calendars
     }
 
     func events(

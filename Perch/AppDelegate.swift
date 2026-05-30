@@ -4,6 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var refreshCoordinator: CalendarRefreshCoordinator?
     private var globalHotKeyController: GlobalHotKeyController?
+    private var settingsWindowController: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         PerchLog.info("Application did finish launching")
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         self.menuBarController = menuBarController
+        self.settingsWindowController = settingsWindowController
         self.refreshCoordinator = refreshCoordinator
         let globalHotKeyController = GlobalHotKeyController(initialShortcut: settingsStore.settings.globalShortcut) { [weak menuBarController] in
             menuBarController?.toggleTrayVisibility()
@@ -78,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         PerchLog.info("Application will terminate")
+        settingsWindowController?.closeBeforeTermination()
         refreshCoordinator?.stop()
     }
 }

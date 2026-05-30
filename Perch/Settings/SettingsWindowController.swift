@@ -1,6 +1,28 @@
 import AppKit
 import SwiftUI
 
+private final class SettingsWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if Self.isCloseWindowShortcut(event) {
+            performClose(nil)
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
+    private static func isCloseWindowShortcut(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.charactersIgnoringModifiers?.lowercased() == "w"
+        else {
+            return false
+        }
+
+        let significantFlags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        return significantFlags == .command
+    }
+}
+
 final class SettingsWindowController: NSWindowController {
     var onSettingsChanged: (() -> Void)?
     var onShortcutChangeRequested: ((GlobalShortcut) -> HotKeyRegistrationResult)?
@@ -22,7 +44,7 @@ final class SettingsWindowController: NSWindowController {
         self.permissionController = permissionController
         self.loginItemManager = loginItemManager
 
-        let window = Self.makeWindow(height: 590)
+        let window = Self.makeWindow(height: 560)
 
         super.init(window: window)
 
@@ -55,7 +77,7 @@ final class SettingsWindowController: NSWindowController {
         self.permissionController = permissionController
         self.loginItemManager = loginItemManager
 
-        let window = Self.makeWindow(height: 520)
+        let window = Self.makeWindow(height: 460)
 
         super.init(window: window)
 
@@ -79,17 +101,20 @@ final class SettingsWindowController: NSWindowController {
     #endif
 
     private static func makeWindow(height: CGFloat) -> NSWindow {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 660, height: height),
+        let window = SettingsWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: height),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Perch Settings"
+        window.title = "Settings"
         window.center()
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = false
+        window.isRestorable = false
         return window
     }
 
@@ -105,6 +130,11 @@ final class SettingsWindowController: NSWindowController {
     @MainActor
     private func restoreAfterAccessRequest() {
         orderWindowFront()
+    }
+
+    @MainActor
+    func closeBeforeTermination() {
+        window?.close()
     }
 
     @MainActor

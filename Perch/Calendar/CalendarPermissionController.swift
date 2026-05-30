@@ -23,14 +23,18 @@ final class CalendarPermissionController: ObservableObject {
     @discardableResult
     func refreshStatus() -> CalendarAccessState {
         let currentState = permissionProvider.authorizationState()
-        accessState = currentState
+        if accessState != currentState {
+            accessState = currentState
+        }
         return currentState
     }
 
     @discardableResult
     func requestFullAccess() async -> CalendarAccessState {
         let currentState = await permissionProvider.requestFullAccess()
-        accessState = currentState
+        if accessState != currentState {
+            accessState = currentState
+        }
         return currentState
     }
 

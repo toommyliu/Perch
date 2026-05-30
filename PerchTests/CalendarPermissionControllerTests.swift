@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Perch
 
 @MainActor
@@ -18,6 +19,20 @@ final class CalendarPermissionControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.refreshStatus(), .fullAccess)
         XCTAssertEqual(controller.accessState, .fullAccess)
+    }
+
+    func testRefreshStatusDoesNotRepublishUnchangedState() {
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let controller = CalendarPermissionController(permissionProvider: provider)
+        var publishedStates: [CalendarAccessState] = []
+        let cancellable = controller.$accessState
+            .dropFirst()
+            .sink { publishedStates.append($0) }
+
+        XCTAssertEqual(controller.refreshStatus(), .fullAccess)
+
+        XCTAssertEqual(publishedStates, [])
+        cancellable.cancel()
     }
 
     func testRequestFullAccessUpdatesPublishedState() async {
