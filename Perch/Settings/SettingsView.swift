@@ -350,171 +350,192 @@ final class SettingsViewModel: ObservableObject {
 
 struct SettingsView: View {
     private static let contentWidth: CGFloat = 640
-    fileprivate static let controlWidth: CGFloat = 132
+    fileprivate static let sectionCornerRadius: CGFloat = 16
+    fileprivate static let insetCornerRadius: CGFloat = 11
+    fileprivate static let menuPickerWidth: CGFloat = 172
     fileprivate static let accessoryColumnWidth: CGFloat = 216
     fileprivate static let shortcutRecorderWidth: CGFloat = 150
 
     @ObservedObject var model: SettingsViewModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                SettingsSection(title: "Calendar") {
-                    accessRow
-                    SettingsRowDivider()
-                    calendarSelectionRow
-                }
+        ZStack {
+            SettingsWindowBackdrop()
 
-                SettingsSection(title: "Menu Bar") {
-                    SettingsRow(
-                        title: "Include Events",
-                        detail: "How far ahead Perch looks for upcoming events."
-                    ) {
-                        Picker("Include Events", selection: $model.lookAheadDays) {
-                            ForEach(CalendarMenubarSettings.supportedLookAheadDays, id: \.self) { days in
-                                Text("\(days) \(days == 1 ? "day" : "days")").tag(days)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .controlSize(.small)
-                        .frame(width: Self.controlWidth)
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsRow(
-                        title: "Event Title",
-                        detail: "When to show the next event title beside the menu bar icon."
-                    ) {
-                        Picker("Event Title", selection: $model.selectedMode) {
-                            ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
-                                Text(mode.displayTitle).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .controlSize(.small)
-                        .frame(width: Self.controlWidth)
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsRow(
-                        title: "All-Day Events",
-                        detail: "Include all-day events in the menu and label."
-                    ) {
-                        Toggle("All-Day Events", isOn: $model.showAllDayEvents)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsRow(
-                        title: "Calendar Colors",
-                        detail: "Use calendar colors to identify events."
-                    ) {
-                        Toggle("Calendar Colors", isOn: $model.showEventColors)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-                }
-
-                SettingsSection(title: "App") {
-                    SettingsRow(
-                        title: "Launch at Login",
-                        detail: "Start Perch automatically when you sign in."
-                    ) {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Toggle("Launch at Login", isOn: $model.launchAtLogin)
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-
-                            if let loginItemError = model.loginItemError {
-                                Text(loginItemError)
-                                    .font(.callout)
-                                    .foregroundStyle(.red)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsRow(
-                        title: "Open Menu",
-                        detail: "Press this shortcut to open or close the Perch menu."
-                    ) {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            HStack(spacing: 8) {
-                                ShortcutRecorderView(shortcut: model.globalShortcut) { event in
-                                    model.recordShortcut(from: event)
-                                }
-                                .frame(width: Self.shortcutRecorderWidth, height: 26)
-
-                                Button("Reset") {
-                                    model.resetShortcutToDefault()
-                                }
-                                .controlSize(.small)
-                                .disabled(model.globalShortcut == .defaultValue)
-                            }
-
-                            if let shortcutError = model.shortcutError {
-                                Text(shortcutError)
-                                    .font(.callout)
-                                    .foregroundStyle(.red)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-
-                #if DEBUG
-                SettingsSection(title: "Debug") {
-                    SettingsRow(title: "Date Icon Override", detail: nil) {
-                        Toggle("Date Icon Override", isOn: $model.debugDateIconOverrideEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsRow(title: "Date", detail: nil) {
-                        Stepper(value: $model.debugDateIconDay, in: 1...31) {
-                            Text("\(model.debugDateIconDay)")
-                                .monospacedDigit()
-                                .frame(width: 32, alignment: .leading)
-                        }
-                        .disabled(!model.debugDateIconOverrideEnabled)
-                    }
-
-                    SettingsRowDivider()
-
-                    SettingsStackedRow(title: "Weight") {
-                        HStack {
-                            Picker("Weight", selection: $model.debugDateIconFontWeight) {
-                                ForEach(DateIconDebugFontWeight.allCases) { weight in
-                                    Text(weight.displayTitle).tag(weight)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(maxWidth: 360)
-                            .disabled(!model.debugDateIconOverrideEnabled)
-
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-                #endif
+            ScrollView {
+                settingsSections
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 14)
-            .padding(.bottom, 22)
+            .scrollContentBackground(.hidden)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
         .frame(width: Self.contentWidth)
+    }
+
+    @ViewBuilder
+    private var settingsSections: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 14) {
+                settingsSectionStack
+            }
+        } else {
+            settingsSectionStack
+        }
+    }
+
+    private var settingsSectionStack: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsSection(title: "Calendar") {
+                accessRow
+                SettingsRowDivider()
+                calendarSelectionRow
+            }
+
+            SettingsSection(title: "Menu Bar") {
+                SettingsRow(
+                    title: "Include Events",
+                    detail: "How far ahead Perch looks for upcoming events."
+                ) {
+                    Picker("Include Events", selection: $model.lookAheadDays) {
+                        ForEach(CalendarMenubarSettings.supportedLookAheadDays, id: \.self) { days in
+                            Text("\(days) \(days == 1 ? "day" : "days")").tag(days)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    title: "Event Title",
+                    detail: "When to show the next event title beside the menu bar icon."
+                ) {
+                    Picker("Event Title", selection: $model.selectedMode) {
+                        ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
+                            Text(mode.displayTitle).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    title: "All-Day Events",
+                    detail: "Include all-day events in the menu and label."
+                ) {
+                    Toggle("All-Day Events", isOn: $model.showAllDayEvents)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    title: "Calendar Colors",
+                    detail: "Use calendar colors to identify events."
+                ) {
+                    Toggle("Calendar Colors", isOn: $model.showEventColors)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
+
+            SettingsSection(title: "App") {
+                SettingsRow(
+                    title: "Launch at Login",
+                    detail: "Start Perch automatically when you sign in."
+                ) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Toggle("Launch at Login", isOn: $model.launchAtLogin)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+
+                        if let loginItemError = model.loginItemError {
+                            Text(loginItemError)
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(
+                    title: "Open Menu",
+                    detail: "Press this shortcut to open or close the Perch menu."
+                ) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack(spacing: 8) {
+                            ShortcutRecorderView(shortcut: model.globalShortcut) { event in
+                                model.recordShortcut(from: event)
+                            }
+                            .frame(width: Self.shortcutRecorderWidth, height: 26)
+
+                            Button("Reset") {
+                                model.resetShortcutToDefault()
+                            }
+                            .controlSize(.small)
+                            .disabled(model.globalShortcut == .defaultValue)
+                        }
+
+                        if let shortcutError = model.shortcutError {
+                            Text(shortcutError)
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+
+            #if DEBUG
+            SettingsSection(title: "Debug") {
+                SettingsRow(title: "Date Icon Override", detail: nil) {
+                    Toggle("Date Icon Override", isOn: $model.debugDateIconOverrideEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                SettingsRowDivider()
+
+                SettingsRow(title: "Date", detail: nil) {
+                    Stepper(value: $model.debugDateIconDay, in: 1...31) {
+                        Text("\(model.debugDateIconDay)")
+                            .monospacedDigit()
+                            .frame(width: 32, alignment: .leading)
+                    }
+                    .disabled(!model.debugDateIconOverrideEnabled)
+                }
+
+                SettingsRowDivider()
+
+                SettingsStackedRow(title: "Weight") {
+                    HStack {
+                        Picker("Weight", selection: $model.debugDateIconFontWeight) {
+                            ForEach(DateIconDebugFontWeight.allCases) { weight in
+                                Text(weight.displayTitle).tag(weight)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 360)
+                        .disabled(!model.debugDateIconOverrideEnabled)
+
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            #endif
+        }
     }
 
     private var accessRow: some View {
@@ -739,14 +760,7 @@ private struct CalendarPickerContainer: View {
             setSelected: setSelected
         )
         .frame(height: calendarListHeight)
-        .background {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: 0.5)
-        }
+        .modifier(SettingsInsetSurface(cornerRadius: SettingsView.insetCornerRadius))
         .transaction { transaction in
             transaction.animation = nil
         }
@@ -950,13 +964,11 @@ final class EdgeAwareScrollView: NSScrollView {
 }
 
 private struct SettingsSection<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     let title: String
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -965,21 +977,105 @@ private struct SettingsSection<Content: View>: View {
             VStack(spacing: 0) {
                 content
             }
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(sectionStroke, lineWidth: 0.5)
-            }
+            .modifier(SettingsGlassSurface(cornerRadius: SettingsView.sectionCornerRadius))
+        }
+    }
+}
+
+private struct SettingsWindowBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            Color(nsColor: .windowBackgroundColor)
+                .opacity(colorScheme == .dark ? 0.62 : 0.72)
+                .background(.regularMaterial)
+                .ignoresSafeArea()
+        } else {
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
+        }
+    }
+}
+
+private struct SettingsGlassSurface: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .padding(.vertical, 1)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(surfaceStroke, lineWidth: 0.5)
+                }
+                .shadow(color: shadowColor, radius: 12, y: 5)
+        } else {
+            content
+                .padding(.vertical, 1)
+                .background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.regularMaterial)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(surfaceStroke, lineWidth: 0.5)
+                }
         }
     }
 
-    private var sectionStroke: Color {
+    private var surfaceStroke: Color {
+        if #available(macOS 26.0, *) {
+            return colorScheme == .dark
+                ? Color.white.opacity(0.12)
+                : Color.white.opacity(0.58)
+        } else {
+            return colorScheme == .dark
+                ? Color(nsColor: .separatorColor).opacity(0.34)
+                : Color(nsColor: .separatorColor).opacity(0.42)
+        }
+    }
+
+    private var shadowColor: Color {
         colorScheme == .dark
-            ? Color(nsColor: .separatorColor).opacity(0.34)
-            : Color(nsColor: .separatorColor).opacity(0.42)
+            ? Color.black.opacity(0.16)
+            : Color.black.opacity(0.07)
+    }
+}
+
+private struct SettingsInsetSurface: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .background(.quaternary.opacity(colorScheme == .dark ? 0.18 : 0.26), in: insetShape)
+                .overlay {
+                    insetShape
+                        .stroke(Color(nsColor: .separatorColor).opacity(colorScheme == .dark ? 0.32 : 0.24), lineWidth: 0.5)
+                }
+        } else {
+            content
+                .background {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                }
+                .overlay {
+                    insetShape
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: 0.5)
+                }
+        }
+    }
+
+    private var insetShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
 }
 
