@@ -17,13 +17,17 @@ Usage: scripts/perch <command>
 Commands:
   debug       Build Debug and launch Perch.app
   release     Build Release and launch Perch.app
-  artifact    Clean-build Release and create a zipped .app artifact
+  artifact    Clean-build Release and create a signed zipped .app artifact
   help        Show this help
 
 Outputs:
   Debug app:      build/DerivedData/Build/Products/Debug/Perch.app
   Release app:    build/DerivedData/Build/Products/Release/Perch.app
   Artifacts:      build/artifacts/Perch-<version>-<build>-<timestamp>.zip
+
+Environment:
+  PERCH_CODESIGN_IDENTITY  Signing identity for artifacts. Defaults to
+                           "Local Code Signing" when available, otherwise "-".
 USAGE
 }
 
@@ -138,10 +142,11 @@ create_artifact() {
   local app="$1"
   mkdir -p "$ARTIFACTS_DIR"
 
-  local version build timestamp artifact staging_dir artifact_app
+  local version build timestamp artifact staging_dir artifact_app identity
   version="$(bundle_value "$app" CFBundleShortVersionString)"
   build="$(bundle_value "$app" CFBundleVersion)"
   timestamp="$(date +%Y%m%d-%H%M%S)"
+  identity="$(artifact_signing_identity)"
 
   [[ -n "$version" ]] || version="0.0"
   [[ -n "$build" ]] || build="0"
@@ -149,25 +154,65 @@ create_artifact() {
   staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/perch-artifact.XXXXXX")"
   artifact_app="$staging_dir/$APP_NAME.app"
   ditto "$app" "$artifact_app"
-  prepare_production_artifact_app "$artifact_app"
+  prepare_production_artifact_app "$artifact_app" "$identity"
+  verify_production_artifact_app "$artifact_app"
 
   artifact="$ARTIFACTS_DIR/$APP_NAME-$version-$build-$timestamp.zip"
   ditto -c -k --keepParent "$artifact_app" "$artifact"
   echo "Created $artifact"
   echo "Artifact bundle id: $(bundle_value "$artifact_app" CFBundleIdentifier)"
+  echo "Artifact signing identity: $identity"
 }
 
 prepare_production_artifact_app() {
   local app="$1"
+  local identity="$2"
 
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCTION_BUNDLE_ID" "$app/Contents/Info.plist"
   codesign \
     --force \
-    --sign - \
+    --sign "$identity" \
     --options runtime \
     --entitlements "Perch/Perch.entitlements" \
     --timestamp=none \
     "$app"
+}
+
+artifact_signing_identity() {
+  if [[ -n "${PERCH_CODESIGN_IDENTITY:-}" ]]; then
+    printf '%s\n' "$PERCH_CODESIGN_IDENTITY"
+    return
+  fi
+
+  if security find-identity -p codesigning -v 2>/dev/null | grep -q '"Local Code Signing"'; then
+    printf '%s\n' "Local Code Signing"
+    return
+  fi
+
+  printf '%s\n' "-"
+}
+
+verify_production_artifact_app() {
+  local app="$1"
+  local entitlements
+  entitlements="$(mktemp "${TMPDIR:-/tmp}/perch-entitlements.XXXXXX")"
+
+  codesign --verify --strict --verbose=2 "$app"
+  codesign -d --entitlements :- "$app" >"$entitlements"
+
+  if [[ "$(bundle_value "$app" CFBundleIdentifier)" != "$PRODUCTION_BUNDLE_ID" ]]; then
+    echo "error: artifact bundle id is not $PRODUCTION_BUNDLE_ID" >&2
+    rm -f "$entitlements"
+    exit 1
+  fi
+
+  if ! /usr/libexec/PlistBuddy -c "Print :com.apple.security.personal-information.calendars" "$entitlements" >/dev/null 2>&1; then
+    echo "error: artifact is missing Calendar entitlement" >&2
+    rm -f "$entitlements"
+    exit 1
+  fi
+
+  rm -f "$entitlements"
 }
 
 main() {
