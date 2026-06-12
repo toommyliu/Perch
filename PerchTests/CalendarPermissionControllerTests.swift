@@ -46,6 +46,48 @@ final class CalendarPermissionControllerTests: XCTestCase {
         XCTAssertEqual(provider.requestCount, 1)
     }
 
+    func testRequestFullAccessSkipsProviderWhenStateIsAlreadyDetermined() async {
+        for accessState in [CalendarAccessState.fullAccess, .writeOnly, .denied, .restricted, .unknown] {
+            let provider = FakePermissionProvider(state: accessState, requestResult: .fullAccess)
+            let controller = CalendarPermissionController(permissionProvider: provider)
+
+            let state = await controller.requestFullAccess()
+
+            XCTAssertEqual(state, accessState)
+            XCTAssertEqual(controller.accessState, accessState)
+            XCTAssertEqual(provider.requestCount, 0)
+        }
+    }
+
+    func testConcurrentRequestFullAccessCallsProviderOnce() async {
+        let provider = DelayedPermissionProvider(state: .notDetermined)
+        let controller = CalendarPermissionController(permissionProvider: provider)
+
+        let firstTask = Task { @MainActor in
+            await controller.requestFullAccess()
+        }
+        await waitForAsyncCondition {
+            provider.requestCount == 1
+        }
+
+        let secondTask = Task { @MainActor in
+            await controller.requestFullAccess()
+        }
+        await Task.yield()
+
+        XCTAssertEqual(provider.requestCount, 1)
+
+        provider.complete(with: .fullAccess)
+
+        let firstState = await firstTask.value
+        let secondState = await secondTask.value
+
+        XCTAssertEqual(firstState, .fullAccess)
+        XCTAssertEqual(secondState, .fullAccess)
+        XCTAssertEqual(controller.accessState, .fullAccess)
+        XCTAssertEqual(provider.requestCount, 1)
+    }
+
     func testOpenPrivacySettingsOpensExpectedURL() {
         let provider = FakePermissionProvider(state: .denied)
         var openedURLs: [URL] = []
@@ -56,6 +98,42 @@ final class CalendarPermissionControllerTests: XCTestCase {
         controller.openPrivacySettings()
 
         XCTAssertEqual(openedURLs, [CalendarPermissionController.privacySettingsURL])
+    }
+
+    private func waitForAsyncCondition(
+        until condition: @escaping @MainActor () -> Bool
+    ) async {
+        for _ in 0..<20 where !condition() {
+            await Task.yield()
+        }
+    }
+}
+
+final class DelayedPermissionProvider: CalendarPermissionProviding {
+    var state: CalendarAccessState
+    private(set) var requestCount = 0
+    private var continuation: CheckedContinuation<CalendarAccessState, Never>?
+
+    init(state: CalendarAccessState) {
+        self.state = state
+    }
+
+    func authorizationState() -> CalendarAccessState {
+        state
+    }
+
+    func requestFullAccess() async -> CalendarAccessState {
+        requestCount += 1
+
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func complete(with result: CalendarAccessState) {
+        state = result
+        continuation?.resume(returning: result)
+        continuation = nil
     }
 }
 

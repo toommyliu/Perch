@@ -10,6 +10,7 @@ final class CalendarPermissionController: ObservableObject {
 
     private let permissionProvider: CalendarPermissionProviding
     private let openURL: (URL) -> Void
+    private var accessRequestTask: Task<CalendarAccessState, Never>?
 
     init(
         permissionProvider: CalendarPermissionProviding,
@@ -31,14 +32,34 @@ final class CalendarPermissionController: ObservableObject {
 
     @discardableResult
     func requestFullAccess() async -> CalendarAccessState {
-        let currentState = await permissionProvider.requestFullAccess()
-        if accessState != currentState {
-            accessState = currentState
+        let currentState = refreshStatus()
+        guard currentState == .notDetermined else {
+            return currentState
         }
-        return currentState
+
+        if let accessRequestTask {
+            return updateAccessState(await accessRequestTask.value)
+        }
+
+        let accessRequestTask = Task {
+            await permissionProvider.requestFullAccess()
+        }
+        self.accessRequestTask = accessRequestTask
+
+        let requestedState = await accessRequestTask.value
+        self.accessRequestTask = nil
+        return updateAccessState(requestedState)
     }
 
     func openPrivacySettings() {
         openURL(Self.privacySettingsURL)
+    }
+
+    @discardableResult
+    private func updateAccessState(_ currentState: CalendarAccessState) -> CalendarAccessState {
+        if accessState != currentState {
+            accessState = currentState
+        }
+        return currentState
     }
 }

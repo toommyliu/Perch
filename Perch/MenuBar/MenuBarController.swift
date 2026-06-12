@@ -244,7 +244,11 @@ final class MenuBarController: NSObject {
 
     @objc func requestCalendarAccess() {
         PerchLog.info("Calendar access requested from menu")
+        statusItem.menu?.cancelTracking()
+
         Task { @MainActor in
+            await Task.yield()
+            NSApp.activate(ignoringOtherApps: true)
             _ = await self.permissionController.requestFullAccess()
             self.refresh()
         }
