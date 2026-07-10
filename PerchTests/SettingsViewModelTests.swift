@@ -88,6 +88,77 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
     }
 
+    func testUpdatingCalendarGroupPersistsAsSingleChange() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        let workCalendar = CalendarInfo(id: "work", title: "Work", sourceTitle: "iCloud", color: .systemBlue)
+        let homeCalendar = CalendarInfo(id: "home", title: "Home", sourceTitle: "iCloud", color: .systemGreen)
+        let holidayCalendar = CalendarInfo(id: "holidays", title: "US Holidays", sourceTitle: "Subscribed", color: .systemRed)
+        let calendarProvider = FakeCalendarEventProvider(calendars: [workCalendar, homeCalendar, holidayCalendar])
+        var changeCount = 0
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            calendarProvider: calendarProvider
+        ) {
+            changeCount += 1
+        }
+
+        await waitForAsyncModelUpdate {
+            model.availableCalendars.count == 3
+        }
+
+        model.setCalendars([workCalendar, homeCalendar], isSelected: false)
+
+        XCTAssertEqual(model.selectedCalendarIdentifiers, ["holidays"])
+        XCTAssertEqual(settingsStore.settings.selectedCalendarIdentifiers, ["holidays"])
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    func testSelectingFinalCalendarNormalizesSelectionToAllCalendars() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        settingsStore.updateSelectedCalendarIdentifiers(["work"])
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        let workCalendar = CalendarInfo(id: "work", title: "Work", sourceTitle: "iCloud", color: .systemBlue)
+        let homeCalendar = CalendarInfo(id: "home", title: "Home", sourceTitle: "iCloud", color: .systemGreen)
+        let calendarProvider = FakeCalendarEventProvider(calendars: [workCalendar, homeCalendar])
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            calendarProvider: calendarProvider,
+            onChange: {}
+        )
+
+        await waitForAsyncModelUpdate {
+            model.availableCalendars.count == 2
+        }
+
+        model.setCalendar(homeCalendar, isSelected: true)
+
+        XCTAssertNil(model.selectedCalendarIdentifiers)
+        XCTAssertNil(settingsStore.settings.selectedCalendarIdentifiers)
+    }
+
+    func testSettingsWindowCommandASelectsFocusedText() {
+        let window = SettingsWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let editor = NSTextView(frame: window.contentView?.bounds ?? .zero)
+        editor.string = "calendar search"
+        editor.setSelectedRange(NSRange(location: editor.string.count, length: 0))
+        window.contentView = editor
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let event = keyEvent(characters: "a", modifierFlags: .command, keyCode: 0)
+
+        XCTAssertTrue(window.performKeyEquivalent(with: event))
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: editor.string.utf16.count))
+    }
+
     func testTogglingCalendarDoesNotReloadCalendarsWhenSettingsRefreshPermissionStatus() async {
         let settingsStore = SettingsStore(userDefaults: makeDefaults())
         let provider = FakePermissionProvider(state: .fullAccess)
