@@ -42,8 +42,8 @@ final class SettingsWindow: NSWindow {
 }
 
 final class SettingsWindowController: NSWindowController {
-    private static let minimumContentHeight: CGFloat = 200
-    private static let maximumContentHeight: CGFloat = 520
+    private static let minimumContentHeight: CGFloat = 180
+    private static let maximumContentHeight: CGFloat = 470
     private static let selectedPaneDefaultsKey = "SettingsWindowSelectedPane"
     private static let toolbarIdentifier = NSToolbar.Identifier("PerchSettingsToolbar")
 
@@ -54,7 +54,6 @@ final class SettingsWindowController: NSWindowController {
     private let permissionController: CalendarPermissionController
     private let loginItemManager: LoginItemManaging
     private var viewModel: SettingsViewModel?
-    private var lastSizedPane: SettingsPane?
 
     #if DEBUG
     init(
@@ -161,7 +160,9 @@ final class SettingsWindowController: NSWindowController {
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.hidesOnDeactivate = false
         window.titlebarSeparatorStyle = .automatic
-        window.isMovableByWindowBackground = true
+        // Keep controls and empty content space interactive without turning the
+        // entire settings surface into a drag handle. The titlebar remains draggable.
+        window.isMovableByWindowBackground = false
         window.isRestorable = false
         window.tabbingMode = .disallowed
         window.autorecalculatesKeyViewLoop = true
@@ -179,11 +180,6 @@ final class SettingsWindowController: NSWindowController {
         )
         let currentContentHeight = window.contentRect(forFrameRect: window.frame).height
         let heightDelta = targetHeight - currentContentHeight
-        let selectedPane = viewModel?.selectedPane
-        let shouldAnimate = window.isVisible
-            && lastSizedPane != nil
-            && lastSizedPane != selectedPane
-        lastSizedPane = selectedPane
         guard abs(heightDelta) > 0.5 else {
             return
         }
@@ -191,7 +187,7 @@ final class SettingsWindowController: NSWindowController {
         var targetFrame = window.frame
         targetFrame.origin.y -= heightDelta
         targetFrame.size.height += heightDelta
-        window.setFrame(targetFrame, display: true, animate: shouldAnimate)
+        window.setFrame(targetFrame, display: true)
     }
 
     private func configureToolbar(selectedPane: SettingsPane) {
@@ -202,7 +198,7 @@ final class SettingsWindowController: NSWindowController {
         let toolbar = NSToolbar(identifier: Self.toolbarIdentifier)
         toolbar.delegate = self
         toolbar.displayMode = .iconAndLabel
-        toolbar.sizeMode = .regular
+        toolbar.sizeMode = .small
         toolbar.allowsUserCustomization = false
         toolbar.autosavesConfiguration = false
         toolbar.selectedItemIdentifier = selectedPane.toolbarItemIdentifier

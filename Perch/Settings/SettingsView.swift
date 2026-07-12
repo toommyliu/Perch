@@ -400,12 +400,12 @@ final class SettingsViewModel: ObservableObject {
 }
 
 struct SettingsView: View {
-    static let contentWidth: CGFloat = 560
-    fileprivate static let sectionCornerRadius: CGFloat = 11
-    fileprivate static let insetCornerRadius: CGFloat = 8
-    fileprivate static let menuPickerWidth: CGFloat = 176
-    fileprivate static let accessoryColumnWidth: CGFloat = 220
-    fileprivate static let shortcutRecorderWidth: CGFloat = 150
+    static let contentWidth: CGFloat = 500
+    fileprivate static let sectionCornerRadius: CGFloat = 9
+    fileprivate static let insetCornerRadius: CGFloat = 7
+    fileprivate static let menuPickerWidth: CGFloat = 154
+    fileprivate static let accessoryColumnWidth: CGFloat = 194
+    fileprivate static let shortcutRecorderWidth: CGFloat = 132
 
     @ObservedObject var model: SettingsViewModel
     @State private var calendarSearchText = ""
@@ -425,9 +425,9 @@ struct SettingsView: View {
 
             ScrollView {
                 paneContent
-                    .padding(.horizontal, 24)
-                    .padding(.top, 18)
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 18)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .fixedSize(horizontal: false, vertical: true)
                     .background {
@@ -449,6 +449,7 @@ struct SettingsView: View {
             }
         }
         .frame(width: Self.contentWidth)
+        .controlSize(.small)
     }
 
     @ViewBuilder
@@ -467,7 +468,7 @@ struct SettingsView: View {
     }
 
     private var generalSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             SettingsSection(title: "Startup") {
                 SettingsRow(
                     title: "Launch at Login",
@@ -498,7 +499,7 @@ struct SettingsView: View {
                             ShortcutRecorderView(shortcut: model.globalShortcut) { event in
                                 model.recordShortcut(from: event)
                             }
-                            .frame(width: Self.shortcutRecorderWidth, height: 28)
+                            .frame(width: Self.shortcutRecorderWidth, height: 24)
 
                             Button("Reset") {
                                 model.resetShortcutToDefault()
@@ -537,15 +538,15 @@ struct SettingsView: View {
 
                 SettingsRowDivider()
 
-                SettingsStackedRow(title: "Weight") {
+                SettingsRow(title: "Weight", detail: nil) {
                     Picker("Weight", selection: $model.debugDateIconFontWeight) {
                         ForEach(DateIconDebugFontWeight.allCases) { weight in
                             Text(weight.displayTitle).tag(weight)
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 360)
+                    .pickerStyle(.menu)
+                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
                     .disabled(!model.debugDateIconOverrideEnabled)
                 }
             }
@@ -554,7 +555,7 @@ struct SettingsView: View {
     }
 
     private var calendarSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             SettingsSection(title: "Privacy") {
                 accessRow
             }
@@ -566,7 +567,7 @@ struct SettingsView: View {
     }
 
     private var menuBarSettings: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             SettingsSection(title: "Upcoming Events") {
                 SettingsRow(
                     title: "Include Events",
@@ -709,9 +710,9 @@ struct SettingsView: View {
 
             calendarSelectionContent
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(minHeight: 48)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(minHeight: 44)
     }
 
     private var calendarSelectionContent: some View {
@@ -775,7 +776,7 @@ struct SettingsView: View {
 }
 
 private enum CalendarPickerLayout {
-    static let rowHeight: CGFloat = 36
+    static let rowHeight: CGFloat = 32
     static let maximumVisibleRows = 6
     static let verticalPadding: CGFloat = 4
     static let scrollbarGutter: CGFloat = 18
@@ -985,7 +986,7 @@ private struct CalendarPickerScrollView: View {
                 }
             }
             .padding(.leading, 6)
-            .padding(.trailing, CalendarPickerLayout.scrollbarGutter)
+            .padding(.trailing, 4)
             .padding(.vertical, CalendarPickerLayout.verticalPadding)
         }
         .scrollIndicators(.automatic)
@@ -1031,7 +1032,7 @@ private struct CalendarPickerGroupHeader: View {
             .foregroundStyle(.secondary)
         }
         .padding(.leading, 6)
-        .padding(.trailing, 4)
+        .padding(.trailing, CalendarPickerLayout.scrollbarGutter)
         .frame(height: 27)
         .accessibilityElement(children: .contain)
     }
@@ -1051,7 +1052,7 @@ private struct CalendarPickerRow: View {
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
                     .frame(width: 18)
 
@@ -1070,7 +1071,8 @@ private struct CalendarPickerRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 6)
+            .padding(.leading, 6)
+            .padding(.trailing, CalendarPickerLayout.scrollbarGutter)
             .frame(maxWidth: .infinity, minHeight: CalendarPickerLayout.rowHeight, alignment: .leading)
             .contentShape(Rectangle())
             .background {
@@ -1105,7 +1107,7 @@ private struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -1222,33 +1224,16 @@ private struct SettingsRow<Accessory: View>: View {
             accessory
                 .frame(width: SettingsView.accessoryColumnWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: 54)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .frame(minHeight: 44)
     }
 }
 
 private struct SettingsRowDivider: View {
     var body: some View {
         Divider()
-            .padding(.leading, 16)
-    }
-}
-
-private struct SettingsStackedRow<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.callout)
-
-            content
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 14)
     }
 }
 
