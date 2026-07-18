@@ -23,22 +23,45 @@ final class CalendarPermissionController: ObservableObject {
     @discardableResult
     func refreshStatus() -> CalendarAccessState {
         let currentState = permissionProvider.authorizationState()
-        if accessState != currentState {
-            accessState = currentState
-        }
+        updateAccessState(currentState)
         return currentState
     }
 
     @discardableResult
     func requestFullAccess() async -> CalendarAccessState {
         let currentState = await permissionProvider.requestFullAccess()
-        if accessState != currentState {
-            accessState = currentState
-        }
+        updateAccessState(currentState)
         return currentState
     }
 
     func openPrivacySettings() {
         openURL(Self.privacySettingsURL)
+    }
+
+    private func updateAccessState(_ currentState: CalendarAccessState) {
+        guard accessState != currentState else { return }
+
+        let previousState = accessState
+        accessState = currentState
+        PerchLog.calendar.notice(
+            """
+            Calendar access changed: \
+            from=\(previousState.logValue, privacy: .public) \
+            to=\(currentState.logValue, privacy: .public)
+            """
+        )
+    }
+}
+
+private extension CalendarAccessState {
+    var logValue: String {
+        switch self {
+        case .notDetermined: "notDetermined"
+        case .fullAccess: "fullAccess"
+        case .writeOnly: "writeOnly"
+        case .denied: "denied"
+        case .restricted: "restricted"
+        case .unknown: "unknown"
+        }
     }
 }

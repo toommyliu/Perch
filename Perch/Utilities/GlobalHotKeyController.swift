@@ -48,6 +48,7 @@ final class GlobalHotKeyController {
     private var hotKeyRef: EventHotKeyRef?
     private var activeShortcut: GlobalShortcut
     private var isEnabled = true
+    private var lastRegistrationFailure: RegistrationFailure?
 
     init(
         initialShortcut: GlobalShortcut,
@@ -90,7 +91,9 @@ final class GlobalHotKeyController {
             activeShortcut = previousShortcut
 
             if wasRegistered {
-                _ = registerHotKeyIfNeeded()
+                _ = registerHotKeyIfNeeded(logRecovery: false)
+            } else {
+                lastRegistrationFailure = nil
             }
 
             return .failure(status)
@@ -165,7 +168,9 @@ final class GlobalHotKeyController {
         )
 
         guard handlerStatus == noErr else {
-            PerchLog.error("Failed to install global hotkey handler: \(handlerStatus)")
+            PerchLog.hotKey.error(
+                "Hot key handler installation failed: status=\(handlerStatus)"
+            )
             return false
         }
 
@@ -173,7 +178,7 @@ final class GlobalHotKeyController {
     }
 
     @discardableResult
-    private func registerHotKeyIfNeeded() -> HotKeyRegistrationResult {
+    private func registerHotKeyIfNeeded(logRecovery: Bool = true) -> HotKeyRegistrationResult {
         guard isEnabled else {
             return .success
         }
@@ -184,12 +189,31 @@ final class GlobalHotKeyController {
 
         let registration = registrar.register(shortcut: activeShortcut, hotKeyID: hotKeyID)
         guard registration.status == noErr, let hotKeyRef = registration.hotKeyRef else {
-            PerchLog.error("Failed to register global hotkey \(activeShortcut.displayTitle): \(registration.status)")
+            let failure = RegistrationFailure(shortcut: activeShortcut, status: registration.status)
+            if lastRegistrationFailure != failure {
+                PerchLog.hotKey.error(
+                    """
+                    Hot key registration failed: \
+                    shortcut=\(self.activeShortcut.displayTitle, privacy: .public) \
+                    status=\(registration.status)
+                    """
+                )
+            }
+            lastRegistrationFailure = failure
             return .failure(registration.status)
         }
 
+        let recovered = logRecovery && lastRegistrationFailure?.shortcut == activeShortcut
         self.hotKeyRef = hotKeyRef
-        PerchLog.info("Registered global hotkey \(activeShortcut.displayTitle)")
+        lastRegistrationFailure = nil
+        if recovered {
+            PerchLog.hotKey.notice(
+                """
+                Hot key registration recovered: \
+                shortcut=\(self.activeShortcut.displayTitle, privacy: .public)
+                """
+            )
+        }
         return .success
     }
 
@@ -200,7 +224,6 @@ final class GlobalHotKeyController {
 
         registrar.unregister(hotKeyRef)
         self.hotKeyRef = nil
-        PerchLog.info("Unregistered global hotkey \(activeShortcut.displayTitle)")
     }
 
     private static func fourCharacterCode(_ string: String) -> OSType {
@@ -216,4 +239,9 @@ final class GlobalHotKeyController {
             RemoveEventHandler(eventHandler)
         }
     }
+}
+
+private struct RegistrationFailure: Equatable {
+    let shortcut: GlobalShortcut
+    let status: OSStatus
 }

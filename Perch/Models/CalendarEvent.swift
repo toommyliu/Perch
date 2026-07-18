@@ -1,12 +1,6 @@
 import AppKit
 import Foundation
 
-enum CalendarEventResponseStatus {
-    case yes
-    case no
-    case maybe
-}
-
 struct CalendarEvent: Identifiable {
     let id: String
     let title: String
@@ -16,8 +10,8 @@ struct CalendarEvent: Identifiable {
     let calendarTitle: String
     let calendarColor: NSColor
     let calendarIdentifier: String
-    let zoomMeetingURL: URL?
-    let responseStatus: CalendarEventResponseStatus?
+    let meetingLink: MeetingLink?
+    let location: String?
 
     init(
         id: String,
@@ -28,8 +22,8 @@ struct CalendarEvent: Identifiable {
         calendarTitle: String,
         calendarColor: NSColor,
         calendarIdentifier: String = "",
-        zoomMeetingURL: URL? = nil,
-        responseStatus: CalendarEventResponseStatus? = nil
+        meetingLink: MeetingLink? = nil,
+        location: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -39,8 +33,8 @@ struct CalendarEvent: Identifiable {
         self.calendarTitle = calendarTitle
         self.calendarColor = calendarColor
         self.calendarIdentifier = calendarIdentifier
-        self.zoomMeetingURL = zoomMeetingURL
-        self.responseStatus = responseStatus
+        self.meetingLink = meetingLink
+        self.location = location
     }
 }
 
@@ -54,7 +48,7 @@ extension CalendarEvent: Equatable {
             && lhs.calendarTitle == rhs.calendarTitle
             && lhs.calendarColor.isEqual(rhs.calendarColor)
             && lhs.calendarIdentifier == rhs.calendarIdentifier
-            && lhs.zoomMeetingURL == rhs.zoomMeetingURL
-            && lhs.responseStatus == rhs.responseStatus
+            && lhs.meetingLink == rhs.meetingLink
+            && lhs.location == rhs.location
     }
 }

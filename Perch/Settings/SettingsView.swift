@@ -3,38 +3,8 @@ import Carbon
 import Combine
 import SwiftUI
 
-enum SettingsPane: String, CaseIterable {
-    case general
-    case calendars
-    case menuBar
-
-    var title: String {
-        switch self {
-        case .general:
-            return "General"
-        case .calendars:
-            return "Calendars"
-        case .menuBar:
-            return "Menu Bar"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .general:
-            return "gearshape"
-        case .calendars:
-            return "calendar"
-        case .menuBar:
-            return "menubar.rectangle"
-        }
-    }
-}
-
 @MainActor
 final class SettingsViewModel: ObservableObject {
-    @Published var selectedPane: SettingsPane
-
     @Published var selectedMode: MenuBarDisplayMode {
         didSet {
             settingsStore.updateDisplayMode(selectedMode)
@@ -138,7 +108,6 @@ final class SettingsViewModel: ObservableObject {
         calendarProvider: CalendarEventProviding? = nil,
         loginItemManager: LoginItemManaging = LoginItemManager(),
         dateIconDebugSettings: DateIconDebugSettings? = nil,
-        selectedPane: SettingsPane = .general,
         onShortcutChangeRequested: @escaping (GlobalShortcut) -> HotKeyRegistrationResult = { _ in .success },
         onAccessRequestCompleted: @escaping () -> Void = {},
         onChange: @escaping () -> Void
@@ -148,7 +117,6 @@ final class SettingsViewModel: ObservableObject {
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
         self.dateIconDebugSettings = dateIconDebugSettings
-        self.selectedPane = selectedPane
         self.debugDateIconOverrideEnabled = dateIconDebugSettings?.isOverrideEnabled ?? false
         self.debugDateIconDay = dateIconDebugSettings?.day ?? Calendar.current.component(.day, from: Date())
         self.debugDateIconFontWeight = dateIconDebugSettings?.fontWeight ?? .semibold
@@ -174,7 +142,6 @@ final class SettingsViewModel: ObservableObject {
         permissionController: CalendarPermissionController,
         calendarProvider: CalendarEventProviding? = nil,
         loginItemManager: LoginItemManaging = LoginItemManager(),
-        selectedPane: SettingsPane = .general,
         onShortcutChangeRequested: @escaping (GlobalShortcut) -> HotKeyRegistrationResult = { _ in .success },
         onAccessRequestCompleted: @escaping () -> Void = {},
         onChange: @escaping () -> Void
@@ -183,7 +150,6 @@ final class SettingsViewModel: ObservableObject {
         self.permissionController = permissionController
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
-        self.selectedPane = selectedPane
         let settings = settingsStore.settings
         self.selectedMode = settings.displayMode
         self.lookAheadDays = settings.lookAheadDays
@@ -312,7 +278,7 @@ final class SettingsViewModel: ObservableObject {
         case .requestAccess:
             return "Allow Access..."
         case .openPrivacySettings:
-            return "Open Privacy Settings..."
+            return "Privacy Settings..."
         case nil:
             return nil
         }
@@ -400,22 +366,25 @@ final class SettingsViewModel: ObservableObject {
 }
 
 struct SettingsView: View {
-    static let contentWidth: CGFloat = 500
-    fileprivate static let sectionCornerRadius: CGFloat = 9
-    fileprivate static let insetCornerRadius: CGFloat = 7
-    fileprivate static let menuPickerWidth: CGFloat = 154
-    fileprivate static let accessoryColumnWidth: CGFloat = 194
-    fileprivate static let shortcutRecorderWidth: CGFloat = 132
+    static let contentWidth: CGFloat = 420
+    private static let headerHeight: CGFloat = 50
+    private static let panelCornerRadius: CGFloat = 14
+    private static let contentHorizontalPadding: CGFloat = 18
+    fileprivate static let shortcutRecorderWidth: CGFloat = 112
 
     @ObservedObject var model: SettingsViewModel
-    @State private var calendarSearchText = ""
+    @State private var isCalendarChooserPresented = false
+    @State private var isDeveloperSettingsExpanded = false
+    private let onReturnToMenu: () -> Void
     private let onContentHeightChange: (CGFloat) -> Void
 
     init(
         model: SettingsViewModel,
+        onReturnToMenu: @escaping () -> Void = {},
         onContentHeightChange: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.model = model
+        self.onReturnToMenu = onReturnToMenu
         self.onContentHeightChange = onContentHeightChange
     }
 
@@ -423,377 +392,844 @@ struct SettingsView: View {
         ZStack {
             SettingsWindowBackdrop()
 
-            ScrollView {
-                paneContent
-                    .padding(.horizontal, 20)
-                    .padding(.top, 14)
-                    .padding(.bottom, 18)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .background {
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: SettingsContentHeightPreferenceKey.self,
-                                value: geometry.size.height
-                            )
-                        }
-                    }
-            }
-            .scrollContentBackground(.hidden)
-            .onPreferenceChange(SettingsContentHeightPreferenceKey.self) { height in
-                guard height > 0 else {
-                    return
-                }
+            VStack(spacing: 0) {
+                panelHeader
 
-                onContentHeightChange(ceil(height))
+                Divider()
+                    .opacity(0.48)
+
+                ScrollView(.vertical) {
+                    settingsContent
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        .padding(.top, 14)
+                        .padding(.bottom, 16)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .background {
+                            GeometryReader { geometry in
+                                Color.clear.preference(
+                                    key: SettingsContentHeightPreferenceKey.self,
+                                    value: geometry.size.height
+                                )
+                            }
+                        }
+                }
+                .contentMargins(
+                    .horizontal,
+                    Self.contentHorizontalPadding,
+                    for: .scrollContent
+                )
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                .onPreferenceChange(SettingsContentHeightPreferenceKey.self) { height in
+                    guard height > 0 else { return }
+                    onContentHeightChange(ceil(height + Self.headerHeight + 1))
+                }
             }
         }
         .frame(width: Self.contentWidth)
+        .clipShape(RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Self.panelCornerRadius, style: .continuous)
+                .stroke(Color.primary.opacity(0.14), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
         .controlSize(.small)
     }
 
-    @ViewBuilder
-    private var paneContent: some View {
-        Group {
-            switch model.selectedPane {
-            case .general:
-                generalSettings
-            case .calendars:
-                calendarSettings
-            case .menuBar:
-                menuBarSettings
+    private var panelHeader: some View {
+        HStack(spacing: 10) {
+            Button(action: onReturnToMenu) {
+                Image(systemName: "chevron.backward")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.borderless)
+            .help("Back to events")
+            .accessibilityLabel("Back to events")
+
+            Text("Settings")
+                .font(.headline)
+
+            Spacer()
         }
-        .id(model.selectedPane)
+        .padding(.horizontal, 14)
+        .frame(height: Self.headerHeight)
+        .frame(maxWidth: .infinity)
     }
 
-    private var generalSettings: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SettingsSection(title: "Startup") {
-                SettingsRow(
-                    title: "Launch at Login",
-                    detail: nil
-                ) {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Toggle("Launch at Login", isOn: $model.launchAtLogin)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-
-                        if let loginItemError = model.loginItemError {
-                            Text(loginItemError)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-            }
-
-            SettingsSection(title: "Keyboard") {
-                SettingsRow(
-                    title: "Open Menu",
-                    detail: nil
-                ) {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        HStack(spacing: 8) {
-                            ShortcutRecorderView(shortcut: model.globalShortcut) { event in
-                                model.recordShortcut(from: event)
-                            }
-                            .frame(width: Self.shortcutRecorderWidth, height: 24)
-
-                            Button("Reset") {
-                                model.resetShortcutToDefault()
-                            }
-                            .disabled(model.globalShortcut == .defaultValue)
-                        }
-
-                        if let shortcutError = model.shortcutError {
-                            Text(shortcutError)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-            }
-
+    private var settingsContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            eventSettings
+            appSettings
             #if DEBUG
-            SettingsSection(title: "Debug") {
-                SettingsRow(title: "Date Icon Override", detail: nil) {
-                    Toggle("Date Icon Override", isOn: $model.debugDateIconOverrideEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-
-                SettingsRowDivider()
-
-                SettingsRow(title: "Date", detail: nil) {
-                    Stepper(value: $model.debugDateIconDay, in: 1...31) {
-                        Text("\(model.debugDateIconDay)")
-                            .monospacedDigit()
-                            .frame(width: 32, alignment: .leading)
-                    }
-                    .disabled(!model.debugDateIconOverrideEnabled)
-                }
-
-                SettingsRowDivider()
-
-                SettingsRow(title: "Weight", detail: nil) {
-                    Picker("Weight", selection: $model.debugDateIconFontWeight) {
-                        ForEach(DateIconDebugFontWeight.allCases) { weight in
-                            Text(weight.displayTitle).tag(weight)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
-                    .disabled(!model.debugDateIconOverrideEnabled)
-                }
-            }
+            developerSettings
             #endif
         }
     }
 
-    private var calendarSettings: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SettingsSection(title: "Privacy") {
-                accessRow
+    private var appSettings: some View {
+        SettingsSection(
+            title: "App",
+            subtitle: "Startup and keyboard access."
+        ) {
+            SettingsRow(
+                title: "Open at login",
+                detail: nil
+            ) {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Toggle("Open at login", isOn: $model.launchAtLogin)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+
+                    if let loginItemError = model.loginItemError {
+                        Text(loginItemError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
 
-            SettingsSection(title: "Included Calendars") {
+            SettingsRowDivider()
+
+            SettingsRow(
+                title: "Keyboard shortcut",
+                detail: nil
+            ) {
+                VStack(alignment: .trailing, spacing: 6) {
+                    HStack(spacing: 8) {
+                        ShortcutRecorderView(shortcut: model.globalShortcut) { event in
+                            model.recordShortcut(from: event)
+                        }
+                        .frame(width: Self.shortcutRecorderWidth, height: 24)
+
+                        Button("Reset") {
+                            model.resetShortcutToDefault()
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(model.globalShortcut == .defaultValue)
+                    }
+
+                    if let shortcutError = model.shortcutError {
+                        Text(shortcutError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    #if DEBUG
+    private var developerSettings: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                isDeveloperSettingsExpanded.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .rotationEffect(.degrees(isDeveloperSettingsExpanded ? 90 : 0))
+                        .frame(width: 12, height: 12)
+
+                    Text("Developer")
+                        .font(.callout.weight(.semibold))
+
+                    Spacer()
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Developer settings")
+            .accessibilityValue(isDeveloperSettingsExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Date icon preview controls")
+
+            if isDeveloperSettingsExpanded {
+                VStack(spacing: 0) {
+                    SettingsRow(
+                        title: "Preview date icon",
+                        detail: nil
+                    ) {
+                        Toggle("Preview date icon", isOn: $model.debugDateIconOverrideEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
+
+                    SettingsRowDivider()
+
+                    SettingsRow(title: "Displayed day", detail: nil) {
+                        Stepper(value: $model.debugDateIconDay, in: 1...31) {
+                            Text("\(model.debugDateIconDay)")
+                                .monospacedDigit()
+                                .frame(width: 32, alignment: .leading)
+                        }
+                        .disabled(!model.debugDateIconOverrideEnabled)
+                    }
+
+                    SettingsRowDivider()
+
+                    SettingsRow(title: "Font weight", detail: nil) {
+                        SettingsValueMenu(
+                            title: "Font weight",
+                            selection: $model.debugDateIconFontWeight,
+                            options: DateIconDebugFontWeight.allCases,
+                            label: \.displayTitle
+                        )
+                        .disabled(!model.debugDateIconOverrideEnabled)
+                    }
+                }
+                .overlay(alignment: .top) { Divider() }
+                .padding(.top, 8)
+            }
+        }
+        .settingsSectionSurface()
+    }
+    #endif
+
+    private var eventSettings: some View {
+        SettingsSection(
+            title: "Events",
+            subtitle: "Choose what appears in the tray menu and menu bar."
+        ) {
+            if model.accessState.isSufficientForReadingEvents {
                 calendarSelectionRow
+            } else {
+                calendarAccessRow
+            }
+
+            SettingsRowDivider()
+
+            SettingsRow(
+                title: "Event range",
+                detail: nil
+            ) {
+                SettingsValueMenu(
+                    title: "Event range",
+                    selection: $model.lookAheadDays,
+                    options: CalendarMenubarSettings.supportedLookAheadDays,
+                    label: lookAheadTitle
+                )
+            }
+
+            SettingsRowDivider()
+
+            SettingsRow(
+                title: "Show next event",
+                detail: nil
+            ) {
+                SettingsValueMenu(
+                    title: "Show next event",
+                    selection: $model.selectedMode,
+                    options: MenuBarDisplayMode.allCases,
+                    label: \.displayTitle
+                )
+            }
+
+            SettingsRowDivider()
+
+            SettingsRow(
+                title: "Include all-day events",
+                detail: nil
+            ) {
+                Toggle("All-day events", isOn: $model.showAllDayEvents)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            SettingsRowDivider()
+
+            SettingsRow(
+                title: "Use calendar colors",
+                detail: nil
+            ) {
+                Toggle("Calendar colors", isOn: $model.showEventColors)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
             }
         }
     }
 
-    private var menuBarSettings: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SettingsSection(title: "Upcoming Events") {
-                SettingsRow(
-                    title: "Include Events",
-                    detail: nil
-                ) {
-                    Picker("Include Events", selection: $model.lookAheadDays) {
-                        ForEach(CalendarMenubarSettings.supportedLookAheadDays, id: \.self) { days in
-                            Text("\(days) \(days == 1 ? "day" : "days")").tag(days)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
-                }
+    private var calendarAccessRow: some View {
+        SettingsRow(
+            title: "Calendar access",
+            detail: nil
+        ) {
+            if model.isRequestingAccess {
+                ProgressView()
+                    .controlSize(.small)
+            } else if let actionTitle = model.accessActionTitle {
+                HStack(spacing: 10) {
+                    Text("Required")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
 
-                SettingsRowDivider()
-
-                SettingsRow(
-                    title: "Event Title",
-                    detail: nil
-                ) {
-                    Picker("Event Title", selection: $model.selectedMode) {
-                        ForEach(MenuBarDisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.displayTitle).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(width: Self.menuPickerWidth, alignment: .trailing)
-                }
-
-                SettingsRowDivider()
-
-                SettingsRow(
-                    title: "All-Day Events",
-                    detail: nil
-                ) {
-                    Toggle("All-Day Events", isOn: $model.showAllDayEvents)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-            }
-
-            SettingsSection(title: "Appearance") {
-                SettingsRow(
-                    title: "Calendar Colors",
-                    detail: nil
-                ) {
-                    Toggle("Calendar Colors", isOn: $model.showEventColors)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-            }
-        }
-    }
-
-    private var accessRow: some View {
-        SettingsRow(title: "Calendar Access", detail: model.accessState.statusDetail) {
-            HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    Image(systemName: model.accessState.isSufficientForReadingEvents ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(model.accessState.isSufficientForReadingEvents ? .green : .orange)
-
-                    Text(accessStatusDisplayTitle)
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .contentTransition(.opacity)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if model.isRequestingAccess {
-                    ProgressView()
-                        .controlSize(.small)
-                        .scaleEffect(0.58)
-                        .frame(width: 16, height: 16)
-                        .transition(.opacity)
-                }
-
-                if let actionTitle = model.accessActionTitle {
                     Button(actionTitle) {
                         model.performAccessAction()
                     }
                     .controlSize(.small)
-                    .disabled(model.isRequestingAccess)
                 }
+            } else {
+                Text("Unavailable")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
-            .animation(.easeInOut(duration: 0.16), value: model.accessState)
-            .animation(.easeInOut(duration: 0.16), value: model.isRequestingAccess)
         }
-    }
-
-    private var accessStatusDisplayTitle: String {
-        switch model.accessState {
-        case .notDetermined:
-            return "Not set"
-        case .fullAccess:
-            return "Enabled"
-        case .writeOnly:
-            return "Write only"
-        case .denied:
-            return "Denied"
-        case .restricted:
-            return "Restricted"
-        case .unknown:
-            return "Unavailable"
-        }
+        .disabled(model.isRequestingAccess)
     }
 
     private var calendarSelectionRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 18) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Show Events From")
-                        .font(.body)
-                    Text(calendarSelectionSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 18)
-
-                HStack(spacing: 6) {
-                    Button("All") {
-                        model.selectAllCalendars()
-                    }
-                    .disabled(!canEditCalendarSelection || model.selectedCalendarIdentifiers == nil)
-                    .help("Select all calendars")
-
-                    Button("None") {
-                        model.selectNoCalendars()
-                    }
-                    .disabled(!canEditCalendarSelection || model.selectedCalendarIdentifiers?.isEmpty == true)
-                    .help("Deselect all calendars")
-                }
-                .controlSize(.small)
-                .disabled(!canEditCalendarSelection)
-            }
-
-            calendarSelectionContent
+        SettingsRow(
+            title: "Calendars",
+            detail: nil
+        ) {
+            CalendarSelectionPopoverButton(
+                summary: calendarSelectionSummary,
+                isEnabled: canEditCalendarSelection,
+                isPresented: $isCalendarChooserPresented,
+                selectedCalendarIdentifiers: model.selectedCalendarIdentifiers,
+                calendars: model.availableCalendars,
+                isSelected: { model.isCalendarSelected($0) },
+                setSelected: { model.setCalendar($0, isSelected: $1) },
+                setCalendarsSelected: { model.setCalendars($0, isSelected: $1) },
+                selectAll: model.selectAllCalendars,
+                selectNone: model.selectNoCalendars
+            )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .frame(minHeight: 44)
-    }
-
-    private var calendarSelectionContent: some View {
-        CalendarSelectionContent(
-            phase: calendarSelectionPhase,
-            calendars: model.availableCalendars,
-            calendarListHeight: calendarListHeight,
-            isSelected: { model.isCalendarSelected($0) },
-            setSelected: { model.setCalendar($0, isSelected: $1) },
-            setCalendarsSelected: { model.setCalendars($0, isSelected: $1) },
-            searchText: $calendarSearchText
-        )
-        .id(calendarSelectionPhase.id)
-    }
-
-    private var calendarSelectionPhase: CalendarSelectionPhase {
-        if !model.accessState.isSufficientForReadingEvents {
-            return .needsAccess
-        }
-
-        if model.isLoadingCalendars {
-            return .loading
-        }
-
-        if let calendarLoadingError = model.calendarLoadingError {
-            return .error(calendarLoadingError)
-        }
-
-        if model.availableCalendars.isEmpty {
-            return .empty
-        }
-
-        return .loaded
     }
 
     private var calendarSelectionSummary: String {
         guard model.accessState.isSufficientForReadingEvents else {
-            return "Calendar access required"
+            return "Access required"
         }
 
         if model.isLoadingCalendars {
-            return "Loading calendars..."
+            return "Loading…"
         }
 
-        return model.selectedCalendarIdentifiers == nil
-            ? "All calendars"
-            : "\(model.selectedCalendarIdentifiers?.count ?? 0) selected"
+        if model.calendarLoadingError != nil {
+            return "Unavailable"
+        }
+
+        guard !model.availableCalendars.isEmpty else {
+            return "No calendars"
+        }
+
+        if model.selectedCalendarIdentifiers == nil {
+            return "All calendars"
+        }
+
+        let selectedCalendars = model.availableCalendars.filter(model.isCalendarSelected)
+        switch selectedCalendars.count {
+        case 0:
+            return "No calendars"
+        case 1:
+            return selectedCalendars[0].title
+        case model.availableCalendars.count:
+            return "All calendars"
+        default:
+            return "\(selectedCalendars.count) calendars"
+        }
     }
 
     private var canEditCalendarSelection: Bool {
         model.accessState.isSufficientForReadingEvents
             && !model.isLoadingCalendars
+            && model.calendarLoadingError == nil
             && !model.availableCalendars.isEmpty
     }
 
-    private var calendarListHeight: CGFloat {
-        let visibleRows = min(max(model.availableCalendars.count, 1), CalendarPickerLayout.maximumVisibleRows)
-        return CGFloat(visibleRows) * CalendarPickerLayout.rowHeight
-            + (CalendarPickerLayout.verticalPadding * 2)
+    private func lookAheadTitle(for days: Int) -> String {
+        days == 1 ? "Today" : "Next \(days) days"
     }
 }
 
-private enum CalendarPickerLayout {
-    static let rowHeight: CGFloat = 32
-    static let maximumVisibleRows = 6
-    static let verticalPadding: CGFloat = 4
-    static let scrollbarGutter: CGFloat = 18
-}
+private struct CalendarSelectionPopoverButton: View {
+    let summary: String
+    let isEnabled: Bool
+    @Binding var isPresented: Bool
+    let selectedCalendarIdentifiers: Set<String>?
+    let calendars: [CalendarInfo]
+    let isSelected: (CalendarInfo) -> Bool
+    let setSelected: (CalendarInfo, Bool) -> Void
+    let setCalendarsSelected: ([CalendarInfo], Bool) -> Void
+    let selectAll: () -> Void
+    let selectNone: () -> Void
 
-private enum CalendarPickerFilter {
-    static func matching(_ calendars: [CalendarInfo], query: String) -> [CalendarInfo] {
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return calendars
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Text(summary)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(width: 150, alignment: .trailing)
+            .contentShape(Rectangle())
         }
-
-        return calendars.filter { calendar in
-            calendar.title.localizedCaseInsensitiveContains(query)
-                || calendar.sourceTitle.localizedCaseInsensitiveContains(query)
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .disabled(!isEnabled)
+        .accessibilityLabel("Calendars to show")
+        .accessibilityValue(summary)
+        .popover(isPresented: $isPresented, arrowEdge: .top) {
+            CalendarSelectionPopover(
+                selectedCalendarIdentifiers: selectedCalendarIdentifiers,
+                calendarGroups: calendarGroups,
+                isSelected: isSelected,
+                setSelected: setSelected,
+                setCalendarsSelected: setCalendarsSelected,
+                selectAll: selectAll,
+                selectNone: selectNone
+            )
         }
     }
+
+    private var calendarGroups: [CalendarSourceGroup] {
+        calendars.reduce(into: []) { groups, calendar in
+            if let index = groups.firstIndex(where: { $0.id == calendar.sourceIdentifier }) {
+                groups[index].calendars.append(calendar)
+            } else {
+                groups.append(CalendarSourceGroup(
+                    sourceIdentifier: calendar.sourceIdentifier,
+                    sourceTitle: calendar.sourceTitle,
+                    calendars: [calendar]
+                ))
+            }
+        }
+    }
+}
+
+private struct CalendarSelectionPopover: View {
+    private static let scrollbarTrailingPadding: CGFloat = 0
+    private static let scrollbarAccessoryInset: CGFloat = 8
+    private static let scrollbarCueInset: CGFloat = 10
+
+    let selectedCalendarIdentifiers: Set<String>?
+    let calendarGroups: [CalendarSourceGroup]
+    let isSelected: (CalendarInfo) -> Bool
+    let setSelected: (CalendarInfo, Bool) -> Void
+    let setCalendarsSelected: ([CalendarInfo], Bool) -> Void
+    let selectAll: () -> Void
+    let selectNone: () -> Void
+
+    @State private var hasMoreCalendarsBelow = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Calendars")
+                    .font(.body.weight(.semibold))
+
+                Spacer()
+
+                Button(selectedCalendarIdentifiers == nil ? "Hide All" : "Show All") {
+                    if selectedCalendarIdentifiers == nil {
+                        selectNone()
+                    } else {
+                        selectAll()
+                    }
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+
+            Divider()
+
+            if shouldScroll {
+                ScrollView {
+                    sourceList
+                        .background {
+                            CalendarPickerScrollObserver(
+                                hasMoreContentBelow: $hasMoreCalendarsBelow
+                            )
+                        }
+                }
+                .frame(maxHeight: 304)
+                .scrollIndicators(.visible)
+                .overlay(alignment: .bottom) {
+                    if hasMoreCalendarsBelow {
+                        CalendarPickerMoreIndicator()
+                            .padding(.trailing, Self.scrollbarCueInset)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.12), value: hasMoreCalendarsBelow)
+                .padding(.leading, 8)
+                .padding(.trailing, Self.scrollbarTrailingPadding)
+                .padding(.vertical, 9)
+            } else {
+                sourceList
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 9)
+            }
+        }
+        .frame(width: 304)
+    }
+
+    private var sourceList: some View {
+        VStack(spacing: 10) {
+            ForEach(calendarGroups) { group in
+                sourceGroup(group)
+            }
+        }
+    }
+
+    private func sourceGroup(_ group: CalendarSourceGroup) -> some View {
+        let selectedCount = group.calendars.count(where: isSelected)
+        let selectsEveryCalendar = selectedCount == group.calendars.count
+
+        return VStack(alignment: .leading, spacing: 2) {
+            CalendarPickerSourceRow(
+                title: group.sourceTitle,
+                selectedCount: selectedCount,
+                totalCount: group.calendars.count,
+                trailingAccessoryInset: shouldScroll ? Self.scrollbarAccessoryInset : 0
+            ) {
+                setCalendarsSelected(group.calendars, !selectsEveryCalendar)
+            }
+
+            ForEach(group.calendars) { calendar in
+                CalendarPickerCalendarRow(
+                    calendar: calendar,
+                    isSelected: isSelected(calendar),
+                    trailingAccessoryInset: shouldScroll ? Self.scrollbarAccessoryInset : 0
+                ) {
+                    setSelected(calendar, !isSelected(calendar))
+                }
+            }
+        }
+    }
+
+    private var shouldScroll: Bool {
+        calendarGroups.flatMap(\.calendars).count > 8
+    }
+
+}
+
+private struct CalendarPickerMoreIndicator: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .windowBackgroundColor).opacity(0),
+                    Color(nsColor: .windowBackgroundColor).opacity(0.96)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 14)
+
+            HStack(spacing: 5) {
+                Text("More calendars below")
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 22)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.96))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct CalendarPickerSourceRow: View {
+    let title: String
+    let selectedCount: Int
+    let totalCount: Int
+    let trailingAccessoryInset: CGFloat
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 8)
+
+                CalendarPickerGroupSelectionMark(
+                    selectedCount: selectedCount,
+                    totalCount: totalCount
+                )
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 8 + trailingAccessoryInset)
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(rowBackground)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityValue("\(selectedCount) of \(totalCount) shown")
+        .accessibilityHint(selectedCount == totalCount ? "Hides this source" : "Shows every calendar in this source")
+    }
+
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.primary.opacity(isHovered ? 0.055 : 0))
+    }
+}
+
+private struct CalendarPickerGroupSelectionMark: View {
+    let selectedCount: Int
+    let totalCount: Int
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(selectedCount == 0 ? Color.clear : Color.accentColor)
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .stroke(selectedCount == 0 ? Color.secondary.opacity(0.72) : Color.accentColor, lineWidth: 1)
+
+            if selectedCount > 0 {
+                Image(systemName: selectedCount == totalCount ? "checkmark" : "minus")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 13, height: 13)
+    }
+}
+
+private struct CalendarPickerCalendarRow: View {
+    let calendar: CalendarInfo
+    let isSelected: Bool
+    let trailingAccessoryInset: CGFloat
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Color(nsColor: calendar.color))
+                    .frame(width: 7, height: 7)
+
+                Text(calendar.title)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .opacity(isSelected ? 1 : 0)
+                    .frame(width: 13)
+            }
+            .padding(.leading, 18)
+            .padding(.trailing, 8 + trailingAccessoryInset)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(rowBackground)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityValue(isSelected ? "Shown" : "Hidden")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.primary.opacity(isHovered ? 0.055 : 0))
+    }
+}
+
+private struct CalendarPickerScrollObserver: NSViewRepresentable {
+    @Binding var hasMoreContentBelow: Bool
+
+    func makeNSView(context: Context) -> CalendarPickerScrollObserverView {
+        CalendarPickerScrollObserverView { hasMoreContentBelow = $0 }
+    }
+
+    func updateNSView(_ nsView: CalendarPickerScrollObserverView, context: Context) {
+        nsView.onChange = { hasMoreContentBelow = $0 }
+        nsView.attachToEnclosingScrollView()
+    }
+
+    static func dismantleNSView(
+        _ nsView: CalendarPickerScrollObserverView,
+        coordinator: ()
+    ) {
+        nsView.stopObserving()
+    }
+}
+
+private final class CalendarPickerScrollObserverView: NSView {
+    var onChange: (Bool) -> Void
+
+    private weak var scrollView: NSScrollView?
+    private var boundsObserver: NSObjectProtocol?
+    private var frameObserver: NSObjectProtocol?
+    private var lastValue: Bool?
+
+    init(onChange: @escaping (Bool) -> Void) {
+        self.onChange = onChange
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        attachToEnclosingScrollView()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    func attachToEnclosingScrollView() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            var ancestor = superview
+            while let view = ancestor {
+                if let enclosingScrollView = view as? NSScrollView {
+                    startObserving(enclosingScrollView)
+                    return
+                }
+                ancestor = view.superview
+            }
+        }
+    }
+
+    func stopObserving() {
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+        if let frameObserver {
+            NotificationCenter.default.removeObserver(frameObserver)
+        }
+        boundsObserver = nil
+        frameObserver = nil
+        scrollView = nil
+    }
+
+    private func startObserving(_ scrollView: NSScrollView) {
+        configureScroller(scrollView)
+
+        guard self.scrollView !== scrollView else {
+            updateVisibility()
+            return
+        }
+
+        stopObserving()
+        self.scrollView = scrollView
+
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        boundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateVisibility()
+        }
+
+        if let documentView = scrollView.documentView {
+            documentView.postsFrameChangedNotifications = true
+            frameObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification,
+                object: documentView,
+                queue: .main
+            ) { [weak self] _ in
+                self?.updateVisibility()
+            }
+        }
+
+        updateVisibility()
+    }
+
+    private func configureScroller(_ scrollView: NSScrollView) {
+        scrollView.scrollerStyle = .overlay
+        scrollView.autohidesScrollers = false
+
+        if !(scrollView.verticalScroller is CalendarPickerScroller) {
+            scrollView.verticalScroller = CalendarPickerScroller(frame: .zero)
+        }
+
+        scrollView.hasVerticalScroller = true
+    }
+
+    private func updateVisibility() {
+        guard let scrollView, let documentView = scrollView.documentView else { return }
+
+        let visibleRect = scrollView.documentVisibleRect
+        let distanceFromBottom = documentView.isFlipped
+            ? documentView.bounds.maxY - visibleRect.maxY
+            : visibleRect.minY - documentView.bounds.minY
+        let hasMoreContentBelow = distanceFromBottom > 1
+        guard hasMoreContentBelow != lastValue else { return }
+        lastValue = hasMoreContentBelow
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onChange(hasMoreContentBelow)
+        }
+    }
+
+    deinit {
+        stopObserving()
+    }
+}
+
+private final class CalendarPickerScroller: NSScroller {
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        drawKnob()
+    }
+
+    override func drawKnob() {
+        var knobRect = rect(for: .knob)
+        guard !knobRect.isEmpty else { return }
+
+        let knobWidth: CGFloat = 4
+        knobRect.origin.x = knobRect.midX - (knobWidth / 2)
+        knobRect.size.width = knobWidth
+        knobRect = knobRect.insetBy(dx: 0, dy: 2)
+
+        NSColor.secondaryLabelColor.withAlphaComponent(0.42).setFill()
+        NSBezierPath(
+            roundedRect: knobRect,
+            xRadius: knobWidth / 2,
+            yRadius: knobWidth / 2
+        ).fill()
+    }
+}
+
+private struct CalendarSourceGroup: Identifiable {
+    let sourceIdentifier: String
+    let sourceTitle: String
+    var calendars: [CalendarInfo]
+
+    var id: String { sourceIdentifier }
 }
 
 private struct SettingsContentHeightPreferenceKey: PreferenceKey {
@@ -804,399 +1240,73 @@ private struct SettingsContentHeightPreferenceKey: PreferenceKey {
     }
 }
 
-private enum CalendarSelectionPhase: Equatable {
-    case needsAccess
-    case loading
-    case error(String)
-    case empty
-    case loaded
-
-    var id: String {
-        switch self {
-        case .needsAccess:
-            return "needsAccess"
-        case .loading:
-            return "loading"
-        case let .error(message):
-            return "error-\(message)"
-        case .empty:
-            return "empty"
-        case .loaded:
-            return "loaded"
-        }
-    }
-}
-
-private struct CalendarSelectionContent: View {
-    let phase: CalendarSelectionPhase
-    let calendars: [CalendarInfo]
-    let calendarListHeight: CGFloat
-    let isSelected: (CalendarInfo) -> Bool
-    let setSelected: (CalendarInfo, Bool) -> Void
-    let setCalendarsSelected: ([CalendarInfo], Bool) -> Void
-    @Binding var searchText: String
-
-    var body: some View {
-        content
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch phase {
-        case .needsAccess:
-            CalendarSelectionMessage(systemImage: "lock", text: "Grant access to choose calendars.")
-        case .loading:
-            CalendarSelectionMessage(systemImage: nil, text: "Loading calendars...", showsProgress: true)
-        case let .error(message):
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
-        case .empty:
-            CalendarSelectionMessage(systemImage: "calendar.badge.exclamationmark", text: "No calendars found")
-        case .loaded:
-            CalendarPickerContainer(
-                calendars: calendars,
-                calendarListHeight: calendarListHeight,
-                isSelected: isSelected,
-                setSelected: setSelected,
-                setCalendarsSelected: setCalendarsSelected,
-                searchText: $searchText
-            )
-        }
-    }
-}
-
-private struct CalendarPickerContainer: View {
-    let calendars: [CalendarInfo]
-    let calendarListHeight: CGFloat
-    let isSelected: (CalendarInfo) -> Bool
-    let setSelected: (CalendarInfo, Bool) -> Void
-    let setCalendarsSelected: ([CalendarInfo], Bool) -> Void
-    @Binding var searchText: String
-
-    var body: some View {
-        VStack(spacing: 8) {
-            if calendars.count > CalendarPickerLayout.maximumVisibleRows {
-                TextField("Search calendars", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Search calendars")
-            }
-
-            Group {
-                if filteredCalendars.isEmpty {
-                    CalendarPickerEmptySearch(query: searchText)
-                } else {
-                    CalendarPickerScrollView(
-                        calendars: filteredCalendars,
-                        isSelected: isSelected,
-                        setSelected: setSelected,
-                        setCalendarsSelected: setCalendarsSelected
-                    )
-                }
-            }
-            .frame(height: calendarListHeight)
-            .modifier(SettingsInsetSurface(cornerRadius: SettingsView.insetCornerRadius))
-        }
-        .transaction { transaction in
-            transaction.animation = nil
-        }
-    }
-
-    private var filteredCalendars: [CalendarInfo] {
-        CalendarPickerFilter.matching(calendars, query: searchText)
-    }
-}
-
-private struct CalendarPickerEmptySearch: View {
-    let query: String
-
-    var body: some View {
-        VStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.title3)
-                .foregroundStyle(.tertiary)
-
-            Text("No matching calendars")
-                .font(.callout.weight(.medium))
-
-            Text("Try a calendar or account name.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No calendars match \(query)")
-    }
-}
-
-private struct CalendarSelectionMessage: View {
-    let systemImage: String?
-    let text: String
-    var showsProgress = false
-
-    var body: some View {
-        HStack(spacing: 7) {
-            if showsProgress {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.58)
-                    .frame(width: 16, height: 16)
-            } else if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-            }
-
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.vertical, 2)
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-    }
-}
-
-private struct CalendarPickerScrollView: View {
-    let calendars: [CalendarInfo]
-    let isSelected: (CalendarInfo) -> Bool
-    let setSelected: (CalendarInfo, Bool) -> Void
-    let setCalendarsSelected: ([CalendarInfo], Bool) -> Void
-
-    var body: some View {
-        ScrollView(.vertical) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(calendarGroups) { group in
-                    CalendarPickerGroupHeader(
-                        group: group,
-                        selectedCount: group.calendars.count(where: isSelected),
-                        setSelected: { setCalendarsSelected(group.calendars, $0) }
-                    )
-
-                    ForEach(Array(group.calendars.enumerated()), id: \.element.id) { index, calendar in
-                        CalendarPickerRow(
-                            calendar: calendar,
-                            isSelected: isSelected(calendar),
-                            setSelected: { setSelected(calendar, $0) },
-                            showsDivider: index < group.calendars.count - 1
-                        )
-                    }
-                }
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, 4)
-            .padding(.vertical, CalendarPickerLayout.verticalPadding)
-        }
-        .scrollIndicators(.automatic)
-    }
-
-    private var calendarGroups: [CalendarPickerGroup] {
-        calendars.reduce(into: []) { groups, calendar in
-            if let index = groups.firstIndex(where: { $0.sourceTitle == calendar.sourceTitle }) {
-                groups[index].calendars.append(calendar)
-            } else {
-                groups.append(CalendarPickerGroup(sourceTitle: calendar.sourceTitle, calendars: [calendar]))
-            }
-        }
-    }
-}
-
-private struct CalendarPickerGroup: Identifiable {
-    let sourceTitle: String
-    var calendars: [CalendarInfo]
-
-    var id: String { sourceTitle }
-}
-
-private struct CalendarPickerGroupHeader: View {
-    let group: CalendarPickerGroup
-    let selectedCount: Int
-    let setSelected: (Bool) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(group.sourceTitle)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            Button(selectedCount == group.calendars.count ? "Clear" : "Select All") {
-                setSelected(selectedCount != group.calendars.count)
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.mini)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.leading, 6)
-        .padding(.trailing, CalendarPickerLayout.scrollbarGutter)
-        .frame(height: 27)
-        .accessibilityElement(children: .contain)
-    }
-}
-
-private struct CalendarPickerRow: View {
-    let calendar: CalendarInfo
-    let isSelected: Bool
-    let setSelected: (Bool) -> Void
-    let showsDivider: Bool
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button {
-            setSelected(!isSelected)
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                    .frame(width: 18)
-
-                Circle()
-                    .fill(Color(nsColor: calendar.color))
-                    .frame(width: 9, height: 9)
-                    .overlay {
-                        Circle()
-                            .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-                    }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(calendar.title)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.leading, 6)
-            .padding(.trailing, CalendarPickerLayout.scrollbarGutter)
-            .frame(maxWidth: .infinity, minHeight: CalendarPickerLayout.rowHeight, alignment: .leading)
-            .contentShape(Rectangle())
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(rowBackground)
-            }
-            .overlay(alignment: .bottom) {
-                if showsDivider {
-                    Divider()
-                        .padding(.leading, 42)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .accessibilityLabel("\(calendar.title), \(calendar.sourceTitle)")
-        .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Toggles whether events from this calendar are shown")
-    }
-
-    private var rowBackground: Color {
-        if isHovering {
-            return Color.primary.opacity(0.065)
-        }
-
-        return isSelected ? Color.accentColor.opacity(0.075) : .clear
-    }
-}
-
 private struct SettingsSection<Content: View>: View {
     let title: String
-    @ViewBuilder let content: Content
+    let subtitle: String?
+    let content: Content
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.leading, 2)
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             VStack(spacing: 0) {
                 content
             }
-            .modifier(SettingsGroupSurface(cornerRadius: SettingsView.sectionCornerRadius))
+            .overlay(alignment: .top) {
+                Divider()
+            }
         }
+        .settingsSectionSurface()
+    }
+}
+
+private struct SettingsSectionSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(Color.primary.opacity(0.035))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(Color.primary.opacity(0.065), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+private extension View {
+    func settingsSectionSurface() -> some View {
+        modifier(SettingsSectionSurface())
     }
 }
 
 private struct SettingsWindowBackdrop: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-
-            if colorScheme == .dark {
-                Color.black.opacity(0.08)
-            } else {
-                Color.black.opacity(0.035)
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-private struct SettingsGroupSurface: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .overlay {
-                        if colorScheme == .dark {
-                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                                .fill(Color.white.opacity(0.045))
-                        }
-                    }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.82), lineWidth: 0.5)
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: cardShadow, radius: 2, y: 1)
-    }
-
-    private var cardShadow: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.22)
-            : Color.black.opacity(0.055)
-    }
-}
-
-private struct SettingsInsetSurface: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                insetShape
-                    .fill(Color(nsColor: .windowBackgroundColor))
-                    .overlay {
-                        insetShape
-                            .fill(Color.black.opacity(colorScheme == .dark ? 0.1 : 0.025))
-                    }
-            }
-            .overlay {
-                insetShape
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.9), lineWidth: 0.5)
-                    .allowsHitTesting(false)
-            }
-            .clipShape(insetShape)
-    }
-
-    private var insetShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
     }
 }
 
@@ -1206,10 +1316,11 @@ private struct SettingsRow<Accessory: View>: View {
     @ViewBuilder let accessory: Accessory
 
     var body: some View {
-        HStack(alignment: .center, spacing: 18) {
+        HStack(alignment: detail == nil ? .center : .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.callout)
+                    .font(.body)
+                    .lineLimit(2)
 
                 if let detail {
                     Text(detail)
@@ -1219,21 +1330,54 @@ private struct SettingsRow<Accessory: View>: View {
                 }
             }
 
-            Spacer(minLength: 18)
+            Spacer(minLength: 12)
 
             accessory
-                .frame(width: SettingsView.accessoryColumnWidth, alignment: .trailing)
+                .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .frame(minHeight: 44)
+        .padding(.horizontal, 2)
+        .padding(.vertical, detail == nil ? 7 : 9)
+        .frame(maxWidth: .infinity, minHeight: 42)
     }
 }
 
 private struct SettingsRowDivider: View {
     var body: some View {
         Divider()
-            .padding(.leading, 14)
+            .opacity(0.62)
+    }
+}
+
+private struct SettingsValueMenu<Value: Hashable>: View {
+    let title: String
+    @Binding var selection: Value
+    let options: [Value]
+    let label: (Value) -> String
+
+    var body: some View {
+        Menu {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    selection = option
+                } label: {
+                    if option == selection {
+                        Label(label(option), systemImage: "checkmark")
+                    } else {
+                        Text(label(option))
+                    }
+                }
+            }
+        } label: {
+            Text(label(selection))
+                .lineLimit(1)
+                .font(.callout.weight(.medium))
+                .frame(minWidth: 112, alignment: .trailing)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel(title)
+        .accessibilityValue(label(selection))
     }
 }
 

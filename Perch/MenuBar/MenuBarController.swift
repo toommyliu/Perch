@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 @MainActor
@@ -13,16 +14,24 @@ final class MenuBarController: NSObject {
     private let labelFormatter = MenuBarLabelFormatter()
     private let menuBuilder = MenuBuilder()
     private let eventOpenURLBuilder = CalendarEventOpenURLBuilder()
-    private let zoomMeetingLaunchURLBuilder = ZoomMeetingLaunchURLBuilder()
+    private let meetingLaunchURLBuilder = MeetingLaunchURLBuilder()
     private lazy var refreshCoalescer = CalendarRefreshCoalescer { [weak self] in
         await self?.refreshCalendarData()
     }
     #if DEBUG
     private let dateIconDebugSettings: DateIconDebugSettings
     #endif
-    private var events: [CalendarEvent] = []
+
+    private var allEvents: [CalendarEvent] = []
+    private var accessState: CalendarAccessState = .unknown
+    private var accessStateCancellable: AnyCancellable?
+    private var lastRefreshFailed = false
+    private var lastFetchedLookAheadDays: Int?
+    private var presentedMenu: NSMenu?
     private var statusItemPresentation: StatusItemPresentation?
     private var isTrayMenuOpen = false
+    private var presentsSettingsAfterMenuCloses = false
+
     var onTrayMenuWillOpen: (() -> Void)?
     var onTrayMenuDidClose: (() -> Void)?
 
@@ -39,9 +48,8 @@ final class MenuBarController: NSObject {
         self.settingsStore = settingsStore
         self.settingsWindowController = settingsWindowController
         self.dateIconDebugSettings = dateIconDebugSettings
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
-
         finishInit()
     }
     #else
@@ -55,25 +63,48 @@ final class MenuBarController: NSObject {
         self.permissionController = permissionController
         self.settingsStore = settingsStore
         self.settingsWindowController = settingsWindowController
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
-
         finishInit()
     }
     #endif
 
     private func finishInit() {
-        PerchLog.info("MenuBarController initialized")
-
+        configureStatusItem()
+        settingsWindowController.onReturnToMenu = { [weak self] in
+            self?.showAgendaMenu()
+        }
         settingsWindowController.onSettingsChanged = { [weak self] in
-            Task { @MainActor in
-                PerchLog.info("Settings changed; refreshing calendar data")
-                self?.refresh()
+            guard let self else { return }
+            let currentLookAheadDays = settingsStore.settings.lookAheadDays
+            let shouldRefetch = lastFetchedLookAheadDays.map {
+                $0 != currentLookAheadDays
+            } ?? false
+            syncPresentation()
+            if shouldRefetch {
+                refresh()
             }
         }
-        configureStatusItem()
-        updateMenu(accessState: permissionController.refreshStatus())
-        updateStatusItem()
+        accessState = permissionController.refreshStatus()
+        observeAccessStateChanges()
+        syncPresentation()
+    }
+
+    private func observeAccessStateChanges() {
+        accessStateCancellable = permissionController.$accessState
+            .removeDuplicates()
+            .sink { [weak self] newAccessState in
+                guard let self, accessState != newAccessState else { return }
+
+                let readabilityChanged = accessState.isSufficientForReadingEvents
+                    != newAccessState.isSufficientForReadingEvents
+                accessState = newAccessState
+                syncPresentation()
+
+                if readabilityChanged {
+                    refresh()
+                }
+            }
     }
 
     func refresh() {
@@ -84,100 +115,202 @@ final class MenuBarController: NSObject {
         updateStatusItem()
     }
 
-    private func configureStatusItem() {
-        guard let button = statusItem.button else {
-            PerchLog.error("Status item has no button")
+    func toggleTrayVisibility() {
+        if settingsWindowController.isPresented {
+            settingsWindowController.dismiss()
             return
         }
 
+        if isTrayMenuOpen {
+            presentedMenu?.cancelTracking()
+            return
+        }
+        showAgendaMenu()
+    }
+
+    private func configureStatusItem() {
+        guard let button = statusItem.button else {
+            PerchLog.presentation.fault("Status item setup failed: reason=buttonUnavailable")
+            return
+        }
         button.imagePosition = .imageLeading
-        button.toolTip = "Perch"
+        button.toolTip = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? "Perch"
         button.title = ""
-        PerchLog.info("Status item configured")
+        button.target = self
+        button.action = #selector(statusItemPressed(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc private func statusItemPressed(_ sender: Any?) {
+        if settingsWindowController.isPresented {
+            let opensContextMenu = NSApp.currentEvent?.type == .rightMouseUp
+            settingsWindowController.dismiss { [weak self] in
+                if opensContextMenu {
+                    self?.showContextMenu()
+                } else {
+                    self?.showAgendaMenu()
+                }
+            }
+            return
+        }
+
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            showContextMenu()
+        } else {
+            showAgendaMenu()
+        }
+    }
+
+    private func showAgendaMenu() {
+        guard !isTrayMenuOpen else { return }
+        present(menu: makeAgendaMenu())
+    }
+
+    private func present(menu: NSMenu) {
+        guard let button = statusItem.button else { return }
+        menu.delegate = self
+        presentedMenu = menu
+        statusItem.menu = menu
+        button.performClick(nil)
+    }
+
+    private func showContextMenu() {
+        let menu = NSMenu()
+        let refreshItem = NSMenuItem(title: "Refresh Calendars", action: #selector(refreshFromContextMenu), keyEquivalent: "r")
+        refreshItem.keyEquivalentModifierMask = .command
+        refreshItem.target = self
+        menu.addItem(refreshItem)
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.keyEquivalentModifierMask = .command
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        menu.addItem(.separator())
+        let quitItem = NSMenuItem(title: "Quit Perch Completely", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        present(menu: menu)
+    }
+
+    @objc private func refreshFromContextMenu() {
+        refresh()
     }
 
     private func refreshCalendarData() async {
-        let accessState = permissionController.refreshStatus()
-        PerchLog.info("Refresh started with access state: \(String(describing: accessState))")
-
+        accessState = permissionController.refreshStatus()
         guard accessState.isSufficientForReadingEvents else {
-            events = []
-            updateStatusItem()
-            updateMenu(accessState: accessState)
+            allEvents = []
+            lastRefreshFailed = false
+            syncPresentation()
             return
         }
 
-        let calendar = Calendar.current
         let now = Date()
-        let settings = settingsStore.settings
-        let startDate = calendar.startOfDay(for: now)
-        let endDate = calendar.date(byAdding: .day, value: settings.lookAheadDays, to: startDate) ?? now.addingTimeInterval(7 * 24 * 60 * 60)
-
+        let startDate = Calendar.current.startOfDay(for: now)
+        let lookAheadDays = settingsStore.settings.lookAheadDays
+        lastFetchedLookAheadDays = lookAheadDays
+        let endDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startDate)
+            ?? now.addingTimeInterval(TimeInterval(lookAheadDays * 24 * 60 * 60))
         do {
-            events = try await calendarProvider.events(
+            allEvents = try await calendarProvider.events(
                 from: startDate,
                 to: endDate,
-                calendarIdentifiers: settings.selectedCalendarIdentifiers
+                calendarIdentifiers: nil
             )
-            PerchLog.info("Fetched \(events.count) events")
         } catch {
-            events = []
-            PerchLog.error("Failed to fetch events: \(error.localizedDescription)")
+            if !lastRefreshFailed {
+                let error = error as NSError
+                PerchLog.calendar.error(
+                    """
+                    Event refresh failed: \
+                    domain=\(error.domain, privacy: .public) \
+                    code=\(error.code) \
+                    lookAheadDays=\(lookAheadDays) \
+                    error=\(error.localizedDescription, privacy: .private)
+                    """
+                )
+            }
+            lastRefreshFailed = true
+            syncPresentation()
+            return
         }
 
+        if lastRefreshFailed {
+            PerchLog.calendar.notice(
+                """
+                Event refresh recovered: \
+                eventCount=\(self.allEvents.count) \
+                lookAheadDays=\(lookAheadDays)
+                """
+            )
+        }
+        lastRefreshFailed = false
+        syncPresentation()
+    }
+
+    private func syncPresentation() {
         updateStatusItem()
-        updateMenu(accessState: accessState)
+    }
+
+    private func makeAgendaMenu() -> NSMenu {
+        let settings = settingsStore.settings
+        let snapshot = menuBuilder.snapshot(
+            accessState: accessState,
+            events: allEvents,
+            globalShortcut: settings.globalShortcut,
+            showEventColors: settings.showEventColors,
+            showAllDayEvents: settings.showAllDayEvents,
+            selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
+            displayMode: settings.displayMode
+        )
+        let menu = menuBuilder.makeMenu(from: snapshot, target: self)
+        if lastRefreshFailed {
+            let warning = NSMenuItem(title: "Calendar data may be out of date", action: nil, keyEquivalent: "")
+            warning.isEnabled = false
+            warning.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Warning")
+            menu.insertItem(warning, at: min(2, menu.items.count))
+        }
+        menu.delegate = self
+        return menu
     }
 
     private func updateStatusItem() {
-        guard statusItem.button != nil else {
-            return
-        }
-
+        guard statusItem.button != nil else { return }
         #if DEBUG
         if dateIconDebugSettings.isOverrideEnabled {
-            setStatusItemPresentation(
-                .dateIcon(day: dateIconDebugSettings.day, options: dateIconDebugSettings.renderOptions),
-                logMessage: "Status item set to debug date icon for day \(dateIconDebugSettings.day)"
-            )
+            setStatusItemPresentation(.dateIcon(day: dateIconDebugSettings.day, options: dateIconDebugSettings.renderOptions))
             return
         }
         #endif
 
-        let content = labelFormatter.labelContent(events: events, settings: settingsStore.settings)
-
-        switch content {
+        switch labelFormatter.labelContent(events: allEvents, settings: settingsStore.settings) {
         case let .dateIcon(day):
             #if DEBUG
-            setStatusItemPresentation(.dateIcon(day: day, options: .defaultValue), logMessage: "Status item set to date icon for day \(day)")
+            setStatusItemPresentation(.dateIcon(day: day, options: .defaultValue))
             #else
-            setStatusItemPresentation(.dateIcon(day: day), logMessage: "Status item set to date icon for day \(day)")
+            setStatusItemPresentation(.dateIcon(day: day))
             #endif
         case let .event(title, relativeText, color):
-            setStatusItemPresentation(
-                .event(title: title, relativeText: relativeText, color: color),
-                logMessage: "Status item set to event: \(title) · \(relativeText)"
-            )
+            setStatusItemPresentation(.event(title: title, relativeText: relativeText, color: color))
         }
     }
 
-    private func setStatusItemPresentation(_ presentation: StatusItemPresentation, logMessage: String) {
-        guard presentation != statusItemPresentation else {
-            return
-        }
-
+    private func setStatusItemPresentation(_ presentation: StatusItemPresentation) {
+        guard presentation != statusItemPresentation, let button = statusItem.button else { return }
         statusItemPresentation = presentation
-        guard let button = statusItem.button else {
-            return
-        }
-
         switch presentation {
         #if DEBUG
         case let .dateIcon(day, options):
-            setDateIcon(day: day, options: options, button: button)
+            statusItem.length = Self.dateIconStatusItemLength
+            button.imagePosition = .imageOnly
+            button.title = ""
+            button.image = MenuIconRenderer.dateIcon(day: day, options: options)
         #else
         case let .dateIcon(day):
-            setDateIcon(day: day, button: button)
+            statusItem.length = Self.dateIconStatusItemLength
+            button.imagePosition = .imageOnly
+            button.title = ""
+            button.image = MenuIconRenderer.dateIcon(day: day)
         #endif
         case let .event(title, relativeText, color):
             statusItem.length = NSStatusItem.variableLength
@@ -185,163 +318,134 @@ final class MenuBarController: NSObject {
             button.image = color.map { MenuIconRenderer.colorBar(color: $0) }
             button.title = "\(color == nil ? "" : " ")\(title) · \(relativeText)"
         }
-
-        PerchLog.info(logMessage)
-    }
-
-    #if DEBUG
-    private func setDateIcon(day: Int, options: DateIconRenderOptions, button: NSStatusBarButton) {
-        statusItem.length = Self.dateIconStatusItemLength
-        button.imagePosition = .imageOnly
-        button.title = ""
-        button.image = MenuIconRenderer.dateIcon(day: day, options: options)
-    }
-    #else
-    private func setDateIcon(day: Int, button: NSStatusBarButton) {
-        statusItem.length = Self.dateIconStatusItemLength
-        button.imagePosition = .imageOnly
-        button.title = ""
-        button.image = MenuIconRenderer.dateIcon(day: day)
-    }
-    #endif
-
-    private func updateMenu(accessState: CalendarAccessState) {
-        let settings = settingsStore.settings
-        let snapshot = menuBuilder.snapshot(
-            accessState: accessState,
-            events: events,
-            globalShortcut: settings.globalShortcut,
-            showEventColors: settings.showEventColors,
-            showAllDayEvents: settings.showAllDayEvents,
-            selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers
-        )
-        let menu = menuBuilder.makeMenu(from: snapshot, target: self)
-        menu.delegate = self
-        statusItem.menu = menu
-        PerchLog.info("Menu updated with \(snapshot.sections.count) sections and access state: \(String(describing: accessState))")
-    }
-
-    func toggleTrayVisibility() {
-        if isTrayMenuOpen {
-            PerchLog.info("Closing tray menu from global hotkey")
-            statusItem.menu?.cancelTracking()
-            return
-        }
-
-        guard let button = statusItem.button else {
-            PerchLog.error("Cannot open tray menu because status item has no button")
-            return
-        }
-
-        PerchLog.info("Opening tray menu from global hotkey")
-        button.performClick(nil)
     }
 
     @objc func closeTrayMenuFromMenuItem() {
-        PerchLog.info("Closing tray menu from menu key equivalent")
-        statusItem.menu?.cancelTracking()
+        presentedMenu?.cancelTracking()
     }
 
     @objc func requestCalendarAccess() {
-        PerchLog.info("Calendar access requested from menu")
         Task { @MainActor in
-            _ = await self.permissionController.requestFullAccess()
-            self.refresh()
+            _ = await permissionController.requestFullAccess()
         }
     }
 
     @objc func openCalendarPrivacySettings() {
-        PerchLog.info("Opening Calendar privacy settings")
         permissionController.openPrivacySettings()
     }
 
     @objc func openCalendarApp() {
-        PerchLog.info("Opening Apple Calendar")
         openCalendarAppFallback()
     }
 
     @objc func openCalendarEvent(_ sender: NSMenuItem) {
-        guard case let .openEvent(eventIdentifier, startDate)? = sender.representedObject as? CalendarMenuAction else {
-            PerchLog.error("Open event menu item missing event action")
+        guard case let .openEvent(eventIdentifier, startDate)? = sender.representedObject as? CalendarMenuAction,
+              let url = eventOpenURLBuilder.url(eventIdentifier: eventIdentifier, startDate: startDate),
+              NSWorkspace.shared.open(url)
+        else {
             openCalendarAppFallback()
             return
-        }
-
-        guard let url = eventOpenURLBuilder.url(eventIdentifier: eventIdentifier, startDate: startDate) else {
-            PerchLog.error("Could not build Calendar event URL")
-            openCalendarAppFallback()
-            return
-        }
-
-        PerchLog.info("Opening Apple Calendar event")
-        if !NSWorkspace.shared.open(url) {
-            PerchLog.error("Could not open Calendar event URL")
-            openCalendarAppFallback()
         }
     }
 
-    @objc func joinZoomMeeting(_ sender: NSMenuItem) {
-        guard case let .joinZoomMeeting(url)? = sender.representedObject as? CalendarMenuAction else {
-            PerchLog.error("Join Zoom menu item missing Zoom action")
-            return
-        }
+    @objc func joinMeetingFromMenu(_ sender: NSMenuItem) {
+        guard case let .joinMeeting(link)? = sender.representedObject as? CalendarMenuAction else { return }
+        openMeeting(link)
+    }
 
-        let launchURL = zoomMeetingLaunchURLBuilder.launchURL(for: url)
-        PerchLog.info("Opening Zoom meeting")
-        if !NSWorkspace.shared.open(launchURL) {
-            PerchLog.error("Could not open Zoom meeting URL")
+    @objc func copyMeetingLink(_ sender: NSMenuItem) {
+        guard case let .copyMeetingLink(url)? = sender.representedObject as? CalendarMenuAction else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+
+    private func openMeeting(_ link: MeetingLink) {
+        let url = meetingLaunchURLBuilder.launchURL(for: link)
+        if !NSWorkspace.shared.open(url) {
+            PerchLog.actions.error(
+                """
+                Meeting launch failed: \
+                provider=\(link.provider.rawValue, privacy: .public) \
+                scheme=\(url.scheme ?? "none", privacy: .public)
+                """
+            )
         }
     }
 
     private func openCalendarAppFallback() {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") else {
-            PerchLog.error("Could not resolve Apple Calendar bundle id")
+            PerchLog.actions.error("Calendar launch failed: reason=applicationNotFound")
             return
         }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+        NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, error in
+            guard let error else { return }
+            let nsError = error as NSError
+            PerchLog.actions.error(
+                """
+                Calendar launch failed: \
+                domain=\(nsError.domain, privacy: .public) \
+                code=\(nsError.code) \
+                error=\(nsError.localizedDescription, privacy: .private)
+                """
+            )
+        }
     }
 
     @objc func openSettings() {
-        PerchLog.info("Opening settings window")
-        settingsWindowController.present()
+        guard !isTrayMenuOpen else {
+            presentsSettingsAfterMenuCloses = true
+            return
+        }
+
+        settingsWindowController.present(anchoredTo: statusItem.button)
+    }
+
+    @objc func performSettingsMenuAction() {
+        openSettings()
     }
 
     @objc func quit() {
-        PerchLog.info("Quit requested")
         NSApp.terminate(nil)
     }
 }
 
 extension MenuBarController: NSMenuDelegate {
     nonisolated func menuWillOpen(_ menu: NSMenu) {
-        updateTrayMenuOpenState(true)
+        updateTrayOpenState(true, menu: menu)
     }
 
     nonisolated func menuDidClose(_ menu: NSMenu) {
-        updateTrayMenuOpenState(false)
+        updateTrayOpenState(false, menu: menu)
     }
 
-    private nonisolated func updateTrayMenuOpenState(_ isOpen: Bool) {
+    private nonisolated func updateTrayOpenState(_ isOpen: Bool, menu: NSMenu) {
         if Thread.isMainThread {
             MainActor.assumeIsolated {
-                isTrayMenuOpen = isOpen
-                if isOpen {
-                    onTrayMenuWillOpen?()
-                } else {
-                    onTrayMenuDidClose?()
-                }
+                applyTrayOpenState(isOpen, menu: menu)
             }
         } else {
             Task { @MainActor in
-                isTrayMenuOpen = isOpen
-                if isOpen {
-                    onTrayMenuWillOpen?()
-                } else {
-                    onTrayMenuDidClose?()
-                }
+                applyTrayOpenState(isOpen, menu: menu)
             }
+        }
+    }
+
+    private func applyTrayOpenState(_ isOpen: Bool, menu: NSMenu) {
+        if !isOpen, presentedMenu === menu {
+            if statusItem.menu === menu {
+                statusItem.menu = nil
+            }
+            presentedMenu = nil
+        }
+
+        isTrayMenuOpen = isOpen
+        if isOpen { onTrayMenuWillOpen?() } else { onTrayMenuDidClose?() }
+
+        guard !isOpen, presentsSettingsAfterMenuCloses else { return }
+        presentsSettingsAfterMenuCloses = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !isTrayMenuOpen else { return }
+            settingsWindowController.present(anchoredTo: statusItem.button)
         }
     }
 }
@@ -364,20 +468,13 @@ private enum StatusItemPresentation: Equatable {
             return lhsDay == rhsDay
         #endif
         case let (.event(lhsTitle, lhsRelativeText, lhsColor), .event(rhsTitle, rhsRelativeText, rhsColor)):
-            return lhsTitle == rhsTitle
-                && lhsRelativeText == rhsRelativeText
-                && colorsAreEqual(lhsColor, rhsColor)
-        default:
-            return false
-        }
-    }
-
-    private static func colorsAreEqual(_ lhs: NSColor?, _ rhs: NSColor?) -> Bool {
-        switch (lhs, rhs) {
-        case (.none, .none):
-            return true
-        case let (.some(lhs), .some(rhs)):
-            return lhs.isEqual(rhs)
+            let colorsMatch: Bool
+            switch (lhsColor, rhsColor) {
+            case let (lhs?, rhs?): colorsMatch = lhs.isEqual(rhs)
+            case (nil, nil): colorsMatch = true
+            default: colorsMatch = false
+            }
+            return lhsTitle == rhsTitle && lhsRelativeText == rhsRelativeText && colorsMatch
         default:
             return false
         }
