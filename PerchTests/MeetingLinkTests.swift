@@ -104,6 +104,14 @@ final class MeetingLinkTests: XCTestCase {
         XCTAssertEqual(link?.url.absoluteString, "https://calls.example.com/room")
     }
 
+    func testDoesNotAssociateUnrelatedURLWithDistantMeetingContext() {
+        let link = extractor.meetingLink(from: [
+            "Join the discussion in person. Agenda: https://docs.example.com"
+        ])
+
+        XCTAssertNil(link)
+    }
+
     func testDoesNotTreatAnOrdinaryEventURLAsAMeeting() {
         let link = extractor.meetingLink(from: [
             "Read https://example.com/agenda before Tuesday"

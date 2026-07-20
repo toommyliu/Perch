@@ -37,6 +37,8 @@ struct MeetingLinkExtractor {
         "video": 2,
         "meeting": 1
     ]
+    private static let genericLinkLabelSeparators = CharacterSet.whitespaces
+        .union(CharacterSet(charactersIn: ":-–—"))
 
     func meetingLink(from strings: [String?]) -> MeetingLink? {
         let strings = strings.compactMap(\.self)
@@ -80,7 +82,13 @@ struct MeetingLinkExtractor {
 
             var bestContext: (priority: Int, distance: Int)?
             for context in contexts {
-                let distance = Self.distance(between: context.range, and: link.range)
+                guard let distance = Self.labelDistance(
+                    from: context.range,
+                    to: link.range,
+                    in: string
+                ) else {
+                    continue
+                }
 
                 if let currentBest = bestContext {
                     if context.priority > currentBest.priority
@@ -157,14 +165,24 @@ struct MeetingLinkExtractor {
         return contexts
     }
 
-    private static func distance(between lhs: NSRange, and rhs: NSRange) -> Int {
-        if NSMaxRange(lhs) <= rhs.location {
-            return rhs.location - NSMaxRange(lhs)
+    private static func labelDistance(
+        from contextRange: NSRange,
+        to linkRange: NSRange,
+        in string: String
+    ) -> Int? {
+        let contextEnd = NSMaxRange(contextRange)
+        guard contextEnd < linkRange.location else { return nil }
+
+        let separatorRange = NSRange(
+            location: contextEnd,
+            length: linkRange.location - contextEnd
+        )
+        let separator = (string as NSString).substring(with: separatorRange)
+        guard separator.unicodeScalars.allSatisfy(genericLinkLabelSeparators.contains) else {
+            return nil
         }
-        if NSMaxRange(rhs) <= lhs.location {
-            return lhs.location - NSMaxRange(rhs)
-        }
-        return 0
+
+        return separatorRange.length
     }
 
     private static func isPreferred(_ lhs: ContextualLink, over rhs: ContextualLink) -> Bool {
