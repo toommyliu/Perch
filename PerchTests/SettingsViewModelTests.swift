@@ -28,7 +28,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(model.showAllDayEvents)
         XCTAssertEqual(model.globalShortcut, shortcut)
         XCTAssertEqual(model.accessState, .writeOnly)
-        XCTAssertEqual(model.accessActionTitle, "Open Privacy Settings...")
+        XCTAssertEqual(model.accessActionTitle, "Privacy Settings...")
         XCTAssertNil(model.selectedCalendarIdentifiers)
     }
 
@@ -157,6 +157,96 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertTrue(window.performKeyEquivalent(with: event))
         XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: editor.string.utf16.count))
+    }
+
+    func testSettingsWindowCanBecomeKeyWithoutBecomingMain() {
+        let window = SettingsWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 390, height: 520),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        XCTAssertTrue(window.canBecomeKey)
+        XCTAssertFalse(window.canBecomeMain)
+    }
+
+    func testSettingsPanelKeepsClicksInsideChildPopoverOpen() {
+        let panel = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 390, height: 520),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        let popover = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 292, height: 340),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        let unrelatedWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.addChildWindow(popover, ordered: .above)
+
+        XCTAssertFalse(SettingsWindowController.shouldDismiss(for: panel, panelWindow: panel))
+        XCTAssertFalse(SettingsWindowController.shouldDismiss(for: popover, panelWindow: panel))
+        XCTAssertTrue(SettingsWindowController.shouldDismiss(for: unrelatedWindow, panelWindow: panel))
+        XCTAssertTrue(SettingsWindowController.shouldDismiss(for: nil, panelWindow: panel))
+    }
+
+    func testSettingsPanelPlacementAnchorsBelowStatusItemAndClampsToScreen() {
+        let frame = SettingsPanelPlacement.frame(
+            anchorRect: NSRect(x: 1_390, y: 878, width: 28, height: 22),
+            panelSize: NSSize(width: 390, height: 620),
+            visibleFrame: NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        )
+
+        XCTAssertEqual(frame.origin.x, 1_042)
+        XCTAssertEqual(frame.origin.y, 252)
+        XCTAssertEqual(frame.size, NSSize(width: 390, height: 620))
+    }
+
+    func testSettingsPanelPlacementKeepsLeftAndBottomInsets() {
+        let frame = SettingsPanelPlacement.frame(
+            anchorRect: NSRect(x: 0, y: 300, width: 20, height: 22),
+            panelSize: NSSize(width: 390, height: 620),
+            visibleFrame: NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        )
+
+        XCTAssertEqual(frame.origin.x, 8)
+        XCTAssertEqual(frame.origin.y, 8)
+    }
+
+    func testSettingsPanelTransitionStartsTowardStatusItem() {
+        let finalFrame = NSRect(x: 1_042, y: 252, width: 390, height: 620)
+
+        let startFrame = SettingsPanelTransition.presentedStartFrame(
+            from: finalFrame,
+            reduceMotion: false
+        )
+
+        XCTAssertEqual(startFrame, finalFrame.offsetBy(dx: 0, dy: 8))
+    }
+
+    func testSettingsPanelTransitionRemovesTravelWhenReduceMotionIsEnabled() {
+        let presentedFrame = NSRect(x: 1_042, y: 252, width: 390, height: 620)
+
+        XCTAssertEqual(
+            SettingsPanelTransition.presentedStartFrame(from: presentedFrame, reduceMotion: true),
+            presentedFrame
+        )
+        XCTAssertEqual(
+            SettingsPanelTransition.dismissedFrame(from: presentedFrame, reduceMotion: true),
+            presentedFrame
+        )
+        XCTAssertLessThan(
+            SettingsPanelTransition.presentationDuration(reduceMotion: true),
+            SettingsPanelTransition.presentationDuration(reduceMotion: false)
+        )
     }
 
     func testTogglingCalendarDoesNotReloadCalendarsWhenSettingsRefreshPermissionStatus() async {
@@ -470,6 +560,35 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 1)
     }
 
+    func testMenuBarFetchesEventsWhenPermissionBecomesReadable() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let provider = FakePermissionProvider(state: .notDetermined, requestResult: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        let calendarProvider = FakeCalendarEventProvider()
+        let settingsWindowController = SettingsWindowController(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            calendarProvider: calendarProvider,
+            loginItemManager: FakeLoginItemManager(isEnabled: false),
+            dateIconDebugSettings: DateIconDebugSettings()
+        )
+        let menuBarController = MenuBarController(
+            calendarProvider: calendarProvider,
+            permissionController: permissionController,
+            settingsStore: settingsStore,
+            settingsWindowController: settingsWindowController,
+            dateIconDebugSettings: DateIconDebugSettings()
+        )
+
+        _ = await permissionController.requestFullAccess()
+        await waitForAsyncModelUpdate {
+            calendarProvider.eventsCallCount == 1
+        }
+
+        XCTAssertEqual(calendarProvider.eventsCallCount, 1)
+        _ = menuBarController
+    }
+
     func testPrivacySettingsActionInvokesURLOpener() {
         let settingsStore = SettingsStore(userDefaults: makeDefaults())
         let provider = FakePermissionProvider(state: .denied)
@@ -564,6 +683,36 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(debugChangeCount, 1)
         XCTAssertEqual(settingsStore.settings, initialSettings)
     }
+
+    func testSettingsWindowLoadsOnDemandAndReleasesWhenHidden() {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let permissionProvider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: permissionProvider)
+        let calendarProvider = FakeCalendarEventProvider()
+        let controller = SettingsWindowController(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            calendarProvider: calendarProvider,
+            loginItemManager: FakeLoginItemManager(isEnabled: false),
+            dateIconDebugSettings: DateIconDebugSettings()
+        )
+
+        XCTAssertFalse(controller.hasLoadedSettingsResources)
+        // Reading presentation state must not construct the settings view graph.
+        XCTAssertFalse(controller.isPresented)
+        XCTAssertFalse(controller.hasLoadedSettingsResources)
+        XCTAssertEqual(calendarProvider.availableCalendarsCallCount, 0)
+
+        controller.present()
+
+        XCTAssertTrue(controller.hasLoadedSettingsResources)
+        XCTAssertTrue(controller.isPresented)
+
+        controller.dismiss(animated: false)
+
+        XCTAssertFalse(controller.hasLoadedSettingsResources)
+        XCTAssertFalse(controller.isPresented)
+    }
     #endif
 
     private func makeDefaults() -> UserDefaults {
@@ -649,6 +798,7 @@ private enum FakeLoginItemError: Error {
 private final class FakeCalendarEventProvider: CalendarEventProviding {
     let calendars: [CalendarInfo]
     private(set) var availableCalendarsCallCount = 0
+    private(set) var eventsCallCount = 0
 
     init(calendars: [CalendarInfo] = []) {
         self.calendars = calendars
@@ -664,6 +814,7 @@ private final class FakeCalendarEventProvider: CalendarEventProviding {
         to endDate: Date,
         calendarIdentifiers: Set<String>?
     ) async throws -> [CalendarEvent] {
-        []
+        eventsCallCount += 1
+        return []
     }
 }

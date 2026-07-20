@@ -5,24 +5,25 @@ PROJECT="Perch.xcodeproj"
 SCHEME="Perch"
 APP_NAME="Perch"
 PRODUCTION_BUNDLE_ID="com.app.perch"
-DEVELOPMENT_BUNDLE_ID="com.app.perch.dev"
+DEBUG_BUNDLE_ID="com.app.perch.debug"
 ARTIFACT_BUILD_BUNDLE_ID="com.app.perch.build"
-DERIVED_DATA_PATH="build/DerivedData"
+ARTIFACT_DERIVED_DATA_PATH="build/ArtifactDerivedData"
 ARTIFACTS_DIR="build/artifacts"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/perch <command>
+Usage: scripts/perch <command> [app arguments...]
 
 Commands:
   debug       Build Debug and launch Perch.app
   release     Build Release and launch Perch.app
+  logs        Build and launch Debug, then stream Perch's unified logs
+  stop        Stop debug, release, or all running Perch variants
   artifact    Clean-build Release and create a zipped .app artifact
   help        Show this help
 
 Outputs:
-  Debug app:      build/DerivedData/Build/Products/Debug/Perch.app
-  Release app:    build/DerivedData/Build/Products/Release/Perch.app
+  Debug/Release:  Xcode's active DerivedData product location
   Artifacts:      build/artifacts/Perch-<version>-<build>-<timestamp>.zip
 USAGE
 }
@@ -40,18 +41,15 @@ require_xcodebuild() {
 
 build_app() {
   local configuration="$1"
-  local bundle_identifier="${2:-$PRODUCTION_BUNDLE_ID}"
 
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration "$configuration" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    "PRODUCT_BUNDLE_IDENTIFIER=$bundle_identifier" \
     build
 }
 
-clean_build_app() {
+clean_build_artifact_app() {
   local configuration="$1"
   local bundle_identifier="${2:-$PRODUCTION_BUNDLE_ID}"
 
@@ -59,73 +57,149 @@ clean_build_app() {
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration "$configuration" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
+    -derivedDataPath "$ARTIFACT_DERIVED_DATA_PATH" \
     "PRODUCT_BUNDLE_IDENTIFIER=$bundle_identifier" \
     clean build
 }
 
 app_path() {
   local configuration="$1"
-  printf '%s/%s/Build/Products/%s/%s.app' "$(repo_root)" "$DERIVED_DATA_PATH" "$configuration" "$APP_NAME"
+  local build_settings target_build_dir full_product_name
+
+  build_settings="$(
+    xcodebuild \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -configuration "$configuration" \
+      -showBuildSettings
+  )"
+  target_build_dir="$(awk -F ' = ' '/^[[:space:]]*TARGET_BUILD_DIR = / { print $2; exit }' <<<"$build_settings")"
+  full_product_name="$(awk -F ' = ' '/^[[:space:]]*FULL_PRODUCT_NAME = / { print $2; exit }' <<<"$build_settings")"
+
+  if [[ -z "$target_build_dir" || -z "$full_product_name" ]]; then
+    echo "error: unable to resolve Xcode's product location for $configuration" >&2
+    exit 1
+  fi
+
+  printf '%s/%s' "$target_build_dir" "$full_product_name"
+}
+
+artifact_app_path() {
+  printf '%s/%s/Build/Products/Release/%s.app' \
+    "$(repo_root)" "$ARTIFACT_DERIVED_DATA_PATH" "$APP_NAME"
 }
 
 launch_app() {
   local app="$1"
+  shift
   if [[ ! -d "$app" ]]; then
     echo "error: app not found at $app" >&2
     exit 1
   fi
 
-  # Quit only an already-running copy from this build path. Quitting by app
-  # display name can terminate /Applications/Perch.app instead.
-  quit_app_at_path "$app"
-  warn_if_other_perch_instance_is_running
-  open -n "$app"
-  echo "Launched $app"
-}
-
-escape_extended_regex() {
-  printf '%s' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
-}
-
-quit_app_at_path() {
-  local app="$1"
-  local executable="$app/Contents/MacOS/$APP_NAME"
-  local escaped_executable pattern
-
-  if [[ ! -x "$executable" ]]; then
-    return
+  quit_running_variant "$app"
+  if (( $# > 0 )); then
+    open "$app" --args "$@"
+  else
+    open "$app"
   fi
 
+  local executable="$app/Contents/MacOS/$APP_NAME"
+  local escaped_executable pattern
   escaped_executable="$(escape_extended_regex "$executable")"
   pattern="^$escaped_executable([[:space:]]|$)"
 
-  if ! pgrep -f "$pattern" >/dev/null 2>&1; then
-    return
-  fi
-
-  pkill -TERM -f "$pattern" >/dev/null 2>&1 || true
-
-  for _ in {1..50}; do
-    if ! pgrep -f "$pattern" >/dev/null 2>&1; then
+  for _ in {1..30}; do
+    if pgrep -f "$pattern" >/dev/null 2>&1; then
+      echo "Launched $app"
       return
     fi
 
     sleep 0.1
   done
 
-  echo "warning: existing app at $app did not exit; the new launch may reuse or ignore it" >&2
+  echo "error: $app did not remain running" >&2
+  exit 1
 }
 
-warn_if_other_perch_instance_is_running() {
-  local escaped_app_name pattern
+escape_extended_regex() {
+  printf '%s' "$1" | sed -e 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+quit_running_variant() {
+  local app="$1"
+  local bundle_identifier
+
+  bundle_identifier="$(bundle_value "$app" CFBundleIdentifier)"
+  [[ -n "$bundle_identifier" ]] || return 0
+
+  quit_running_bundle_identifier "$bundle_identifier"
+}
+
+quit_running_bundle_identifier() {
+  local bundle_identifier="$1"
+  local escaped_app_name process_pattern
+  local pid executable running_app running_bundle_identifier parent_pid parent_command
 
   escaped_app_name="$(escape_extended_regex "$APP_NAME")"
-  pattern="/$escaped_app_name\\.app/Contents/MacOS/$escaped_app_name([[:space:]]|$)"
+  process_pattern="/$escaped_app_name\\.app/Contents/MacOS/$escaped_app_name([[:space:]]|$)"
 
-  if pgrep -f "$pattern" >/dev/null 2>&1; then
-    echo "warning: another Perch instance is still running; the built app may exit because Perch uses a single-instance lock" >&2
-  fi
+  while IFS= read -r pid; do
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    executable="$(
+      lsof -a -p "$pid" -d txt -Fn 2>/dev/null \
+        | sed -n 's#^n\(.*\/'"$APP_NAME"'\.app/Contents/MacOS/'"$APP_NAME"'\)$#\1#p' \
+        | sed -n '1p'
+    )"
+    [[ -n "$executable" ]] || continue
+
+    running_app="${executable%/Contents/MacOS/$APP_NAME}"
+    running_bundle_identifier="$(bundle_value "$running_app" CFBundleIdentifier)"
+    [[ "$running_bundle_identifier" == "$bundle_identifier" ]] || continue
+
+    parent_pid="$(ps -p "$pid" -o ppid= | tr -d '[:space:]')"
+    parent_command="$(ps -p "$parent_pid" -o command= 2>/dev/null || true)"
+    if [[ "$parent_command" == *debugserver* ]]; then
+      echo "error: Xcode is already running $bundle_identifier from $running_app (PID $pid). Stop the active Xcode run first." >&2
+      exit 1
+    fi
+
+    echo "Stopping existing $bundle_identifier process $pid from $running_app"
+    kill -TERM "$pid"
+    for _ in {1..50}; do
+      if ! kill -0 "$pid" >/dev/null 2>&1; then
+        break
+      fi
+
+      sleep 0.1
+    done
+
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      echo "error: existing $bundle_identifier process $pid did not exit" >&2
+      exit 1
+    fi
+  done < <(pgrep -f "$process_pattern" 2>/dev/null || true)
+
+  return 0
+}
+
+stop_variants() {
+  case "${1:-}" in
+    debug)
+      quit_running_bundle_identifier "$DEBUG_BUNDLE_ID"
+      ;;
+    release)
+      quit_running_bundle_identifier "$PRODUCTION_BUNDLE_ID"
+      ;;
+    all)
+      quit_running_bundle_identifier "$DEBUG_BUNDLE_ID"
+      quit_running_bundle_identifier "$PRODUCTION_BUNDLE_ID"
+      ;;
+    *)
+      echo "error: stop requires debug, release, or all" >&2
+      exit 2
+      ;;
+  esac
 }
 
 bundle_value() {
@@ -172,20 +246,37 @@ prepare_production_artifact_app() {
 
 main() {
   cd "$(repo_root)"
-  require_xcodebuild
 
   case "${1:-help}" in
     debug)
-      build_app Debug "$DEVELOPMENT_BUNDLE_ID"
-      launch_app "$(app_path Debug)"
+      require_xcodebuild
+      quit_running_bundle_identifier "$DEBUG_BUNDLE_ID"
+      build_app Debug
+      launch_app "$(app_path Debug)" "${@:2}"
       ;;
     release)
-      build_app Release "$DEVELOPMENT_BUNDLE_ID"
-      launch_app "$(app_path Release)"
+      require_xcodebuild
+      quit_running_bundle_identifier "$PRODUCTION_BUNDLE_ID"
+      build_app Release
+      launch_app "$(app_path Release)" "${@:2}"
+      ;;
+    logs)
+      require_xcodebuild
+      quit_running_bundle_identifier "$DEBUG_BUNDLE_ID"
+      build_app Debug
+      launch_app "$(app_path Debug)"
+      exec /usr/bin/log stream \
+        --info \
+        --style compact \
+        --predicate "subsystem == \"$DEBUG_BUNDLE_ID\""
+      ;;
+    stop)
+      stop_variants "${2:-}"
       ;;
     artifact)
-      clean_build_app Release "$ARTIFACT_BUILD_BUNDLE_ID"
-      create_artifact "$(app_path Release)"
+      require_xcodebuild
+      clean_build_artifact_app Release "$ARTIFACT_BUILD_BUNDLE_ID"
+      create_artifact "$(artifact_app_path)"
       ;;
     help|-h|--help)
       usage
