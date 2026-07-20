@@ -31,6 +31,11 @@ enum MenuBarLabelContent: Equatable {
 
 struct MenuBarLabelFormatter {
     private let maxTitleLength = 28
+    private let locale: Locale
+
+    init(locale: Locale = .autoupdatingCurrent) {
+        self.locale = locale
+    }
 
     func labelContent(
         events: [CalendarEvent],
@@ -87,10 +92,12 @@ struct MenuBarLabelFormatter {
         if event.isAllDay {
             if calendar.isDate(event.startDate, inSameDayAs: now)
                 || (event.startDate <= now && event.endDate >= now) {
-                return "today"
+                return "All-day"
             }
 
-            return mode == .always ? DateFormatting.weekday(event.startDate) : futureRelativeText(from: now, to: event.startDate)
+            return mode == .always
+                ? DateFormatting.weekday(event.startDate, locale: locale, calendar: calendar)
+                : futureRelativeText(from: now, to: event.startDate)
         }
 
         if event.startDate <= now && event.endDate >= now {

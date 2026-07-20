@@ -3,7 +3,7 @@ import XCTest
 @testable import Perch
 
 final class MenuBarLabelFormatterTests: XCTestCase {
-    private let formatter = MenuBarLabelFormatter()
+    private let formatter = MenuBarLabelFormatter(locale: Locale(identifier: "en_US"))
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
@@ -163,7 +163,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .event(title: "CMPE172", relativeText: "0m left", color: .systemBlue))
     }
 
-    func testAllDayEventFormatsAsToday() {
+    func testAllDayEventFormatsAsAllDay() {
         let now = date(hour: 9, minute: 30)
         let event = CalendarEvent(
             id: "all-day",
@@ -182,7 +182,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
             calendar: calendar
         )
 
-        XCTAssertEqual(content, .event(title: "Conference", relativeText: "today", color: .systemBlue))
+        XCTAssertEqual(content, .event(title: "Conference", relativeText: "All-day", color: .systemBlue))
     }
 
     func testAllDayEventIsIgnoredWhenDisabled() {
@@ -304,6 +304,122 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         components.hour = hour
         components.minute = minute
         components.second = second
+        return components.date!
+    }
+}
+
+final class DateFormattingTests: XCTestCase {
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    func testEventTimeUsesLocalePreferredHourCycle() {
+        let date = makeDate(day: 14, hour: 13, minute: 5)
+
+        let twelveHourTime = DateFormatting.eventTime(
+            date,
+            locale: Locale(identifier: "en_US@hours=h12"),
+            calendar: calendar
+        )
+        let twentyFourHourTime = DateFormatting.eventTime(
+            date,
+            locale: Locale(identifier: "en_US@hours=h23"),
+            calendar: calendar
+        )
+
+        XCTAssertTrue(twelveHourTime.hasPrefix("1:05"))
+        XCTAssertTrue(twelveHourTime.hasSuffix("PM"))
+        XCTAssertEqual(twentyFourHourTime, "13:05")
+    }
+
+    func testMenuSectionDateOrderFollowsLocale() {
+        let date = makeDate(day: 14, hour: 13, minute: 5)
+        let now = makeDate(day: 12, hour: 9, minute: 0)
+
+        XCTAssertEqual(
+            DateFormatting.menuSectionTitle(
+                for: date,
+                now: now,
+                calendar: calendar,
+                locale: Locale(identifier: "en_US")
+            ),
+            "Wed, Jan 14"
+        )
+        XCTAssertEqual(
+            DateFormatting.menuSectionTitle(
+                for: date,
+                now: now,
+                calendar: calendar,
+                locale: Locale(identifier: "en_GB")
+            ),
+            "Wed 14 Jan"
+        )
+        XCTAssertEqual(
+            DateFormatting.menuSectionTitle(
+                for: date,
+                now: now,
+                calendar: calendar,
+                locale: Locale(identifier: "ja_JP")
+            ),
+            "1月14日(水)"
+        )
+    }
+
+    func testRelativeDayTitlesUseLocale() {
+        let now = makeDate(day: 14, hour: 9, minute: 0)
+
+        XCTAssertEqual(
+            DateFormatting.menuSectionTitle(
+                for: makeDate(day: 14, hour: 13, minute: 5),
+                now: now,
+                calendar: calendar,
+                locale: Locale(identifier: "de_DE")
+            ),
+            "Heute"
+        )
+        XCTAssertEqual(
+            DateFormatting.menuSectionTitle(
+                for: makeDate(day: 15, hour: 13, minute: 5),
+                now: now,
+                calendar: calendar,
+                locale: Locale(identifier: "de_DE")
+            ),
+            "Morgen"
+        )
+    }
+
+    func testWeekdayUsesLocale() {
+        let date = makeDate(day: 14, hour: 13, minute: 5)
+
+        XCTAssertEqual(
+            DateFormatting.weekday(
+                date,
+                locale: Locale(identifier: "en_US"),
+                calendar: calendar
+            ),
+            "Wed"
+        )
+        XCTAssertEqual(
+            DateFormatting.weekday(
+                date,
+                locale: Locale(identifier: "ja_JP"),
+                calendar: calendar
+            ),
+            "水"
+        )
+    }
+
+    private func makeDate(day: Int, hour: Int, minute: Int) -> Date {
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = 2026
+        components.month = 1
+        components.day = day
+        components.hour = hour
+        components.minute = minute
         return components.date!
     }
 }

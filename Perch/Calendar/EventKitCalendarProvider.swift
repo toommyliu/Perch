@@ -3,12 +3,15 @@ import EventKit
 import Foundation
 
 final class EventKitCalendarProvider: CalendarProviding {
-    private let eventStore: EKEventStore
-    private let zoomMeetingLinkExtractor = ZoomMeetingLinkExtractor()
+    private let eventStore: EventStoreBox
+    private let meetingLinkExtractor = MeetingLinkExtractor()
+    private let queryQueue = DispatchQueue(
+        label: "com.app.perch.eventkit-query",
+        qos: .userInitiated
+    )
 
     init(eventStore: EKEventStore = EKEventStore()) {
-        self.eventStore = eventStore
-        PerchLog.info("EventKitCalendarProvider initialized")
+        self.eventStore = EventStoreBox(eventStore)
     }
 
     func authorizationState() -> CalendarAccessState {
@@ -32,27 +35,40 @@ final class EventKitCalendarProvider: CalendarProviding {
         let granted: Bool
 
         do {
-            granted = try await eventStore.requestFullAccessToEvents()
+            granted = try await eventStore.value.requestFullAccessToEvents()
         } catch {
-            PerchLog.error("Calendar full access request failed: \(error.localizedDescription)")
+            let error = error as NSError
+            PerchLog.calendar.error(
+                """
+                Calendar access request failed: \
+                domain=\(error.domain, privacy: .public) \
+                code=\(error.code) \
+                error=\(error.localizedDescription, privacy: .private)
+                """
+            )
             return authorizationState()
         }
 
-        PerchLog.info("Calendar full access request completed: \(granted)")
         return granted ? .fullAccess : authorizationState()
     }
 
     func availableCalendars() async throws -> [CalendarInfo] {
-        eventStore.calendars(for: .event)
-            .map { calendar in
-                CalendarInfo(
-                    id: calendar.calendarIdentifier,
-                    title: calendar.title,
-                    sourceTitle: calendar.source.title,
-                    color: NSColor(cgColor: calendar.cgColor) ?? .controlAccentColor
-                )
+        await withCheckedContinuation { continuation in
+            queryQueue.async { [eventStore] in
+                let calendars = eventStore.value.calendars(for: .event)
+                    .map { calendar in
+                        CalendarInfo(
+                            id: calendar.calendarIdentifier,
+                            title: calendar.title,
+                            sourceTitle: calendar.source.title,
+                            sourceIdentifier: calendar.source.sourceIdentifier,
+                            color: NSColor(cgColor: calendar.cgColor) ?? .controlAccentColor
+                        )
+                    }
+                    .sorted(by: Self.isOrderedBefore)
+                continuation.resume(returning: calendars)
             }
-            .sorted(by: Self.isOrderedBefore)
+        }
     }
 
     func events(
@@ -64,43 +80,41 @@ final class EventKitCalendarProvider: CalendarProviding {
             return []
         }
 
-        let calendars = eventStore.calendars(for: .event)
-            .filter { calendar in
-                calendarIdentifiers?.contains(calendar.calendarIdentifier) ?? true
-            }
-        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: calendars)
-
-        return eventStore.events(matching: predicate)
-            .filter { $0.status != .canceled }
-            .map { event in
-                CalendarEvent(
-                    id: event.calendarItemIdentifier,
-                    title: event.title?.isEmpty == false ? event.title : "Untitled",
-                    startDate: event.startDate,
-                    endDate: event.endDate,
-                    isAllDay: event.isAllDay,
-                    calendarTitle: event.calendar.title,
-                    calendarColor: NSColor(cgColor: event.calendar.cgColor) ?? .controlAccentColor,
-                    calendarIdentifier: event.calendar.calendarIdentifier,
-                    zoomMeetingURL: zoomMeetingLinkExtractor.meetingURL(from: [
-                        event.url?.absoluteString,
-                        event.location,
-                        event.notes
-                    ]),
-                    responseStatus: Self.responseStatus(for: event)
+        return await withCheckedContinuation { continuation in
+            queryQueue.async { [eventStore, meetingLinkExtractor] in
+                let calendars = eventStore.value.calendars(for: .event)
+                    .filter { calendar in
+                        calendarIdentifiers?.contains(calendar.calendarIdentifier) ?? true
+                    }
+                let predicate = eventStore.value.predicateForEvents(
+                    withStart: startDate,
+                    end: endDate,
+                    calendars: calendars
                 )
+                let events = eventStore.value.events(matching: predicate)
+                    .filter { $0.status != .canceled }
+                    .map { event in
+                        CalendarEvent(
+                            id: event.calendarItemIdentifier,
+                            title: event.title?.isEmpty == false ? event.title : "Untitled",
+                            startDate: event.startDate,
+                            endDate: event.endDate,
+                            isAllDay: event.isAllDay,
+                            calendarTitle: event.calendar.title,
+                            calendarColor: NSColor(cgColor: event.calendar.cgColor) ?? .controlAccentColor,
+                            calendarIdentifier: event.calendar.calendarIdentifier,
+                            meetingLink: meetingLinkExtractor.meetingLink(from: [
+                                event.url?.absoluteString,
+                                event.location,
+                                event.notes
+                            ]),
+                            location: event.location
+                        )
+                    }
+                    .sorted(by: Self.isEventOrderedBefore)
+                continuation.resume(returning: events)
             }
-            .sorted {
-                if $0.startDate != $1.startDate {
-                    return $0.startDate < $1.startDate
-                }
-
-                if $0.endDate != $1.endDate {
-                    return $0.endDate < $1.endDate
-                }
-
-                return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
+        }
     }
 
     private static func isOrderedBefore(_ lhs: CalendarInfo, _ rhs: CalendarInfo) -> Bool {
@@ -117,22 +131,27 @@ final class EventKitCalendarProvider: CalendarProviding {
         return lhs.id < rhs.id
     }
 
-    private static func responseStatus(for event: EKEvent) -> CalendarEventResponseStatus? {
-        guard let currentUser = event.attendees?.first(where: { $0.isCurrentUser }) else {
-            return nil
+    private static func isEventOrderedBefore(_ lhs: CalendarEvent, _ rhs: CalendarEvent) -> Bool {
+        if lhs.startDate != rhs.startDate {
+            return lhs.startDate < rhs.startDate
         }
 
-        switch currentUser.participantStatus {
-        case .accepted:
-            return .yes
-        case .declined:
-            return .no
-        case .tentative:
-            return .maybe
-        case .unknown, .pending, .delegated, .completed, .inProcess:
-            return nil
-        @unknown default:
-            return nil
+        if lhs.endDate != rhs.endDate {
+            return lhs.endDate < rhs.endDate
         }
+
+        return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+    }
+
+}
+
+// EventKit's synchronous query API is explicitly intended for dispatch queues, but
+// EKEventStore predates Sendable annotations. Every query through this box is serialized
+// by EventKitCalendarProvider.queryQueue.
+private final class EventStoreBox: @unchecked Sendable {
+    let value: EKEventStore
+
+    init(_ value: EKEventStore) {
+        self.value = value
     }
 }

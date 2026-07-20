@@ -7,11 +7,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        PerchLog.info("Application did finish launching")
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        let usesDemoData = arguments.contains("--demo-data")
+        let usesUITestHost = arguments.contains("--ui-testing")
+        NSApp.setActivationPolicy(usesUITestHost ? .regular : .accessory)
+        let userDefaults = usesDemoData
+            ? UserDefaults(suiteName: "com.app.perch.demo") ?? .standard
+            : .standard
+        #else
         NSApp.setActivationPolicy(.accessory)
-
-        let settingsStore = SettingsStore()
+        let userDefaults = UserDefaults.standard
+        #endif
+        let settingsStore = SettingsStore(userDefaults: userDefaults)
+        #if DEBUG
+        let calendarProvider: CalendarProviding = usesDemoData
+            ? DemoCalendarProvider()
+            : EventKitCalendarProvider()
+        #else
         let calendarProvider = EventKitCalendarProvider()
+        #endif
         let permissionController = CalendarPermissionController(permissionProvider: calendarProvider)
         let loginItemManager = LoginItemManager()
         #if DEBUG
@@ -62,24 +77,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             globalHotKeyController?.applyShortcut(shortcut) ?? .failure(OSStatus(-1))
         }
 
-        // While an NSMenu is tracking, AppKit can postpone Carbon hotkey delivery until
-        // after the menu closes. Disable Carbon while open and let the menu's own hidden
-        // key equivalent handle the close press immediately.
+        // Carbon hotkeys are postponed while NSMenu tracks. The menu carries the same
+        // shortcut as a hidden key equivalent so a second press closes it immediately.
         menuBarController.onTrayMenuWillOpen = { [weak globalHotKeyController] in
             globalHotKeyController?.setEnabled(false)
         }
         menuBarController.onTrayMenuDidClose = { [weak globalHotKeyController] in
             globalHotKeyController?.setEnabled(true)
         }
+
         self.globalHotKeyController = globalHotKeyController
 
         refreshCoordinator.start()
         menuBarController.refresh()
-        PerchLog.info("Application setup complete")
+
+        #if DEBUG
+        if usesDemoData, arguments.contains("--show-settings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                menuBarController.openSettings()
+            }
+        }
+        if usesDemoData, arguments.contains("--show-menu") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                menuBarController.toggleTrayVisibility()
+            }
+        }
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        PerchLog.info("Application will terminate")
         settingsWindowController?.closeBeforeTermination()
         refreshCoordinator?.stop()
     }
