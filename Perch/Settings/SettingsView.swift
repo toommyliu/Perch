@@ -420,6 +420,7 @@ struct SettingsView: View {
                 )
                 .scrollContentBackground(.hidden)
                 .scrollIndicators(.hidden)
+                .scrollBounceBehavior(.basedOnSize)
                 .onPreferenceChange(SettingsContentHeightPreferenceKey.self) { height in
                     guard height > 0 else { return }
                     onContentHeightChange(ceil(height + Self.headerHeight + 1))
