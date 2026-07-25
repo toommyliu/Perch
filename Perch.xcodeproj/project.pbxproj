@@ -33,6 +33,7 @@
 		10000000000000000000001B /* DateIconDebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011B /* DateIconDebugSettings.swift */; };
 		10000000000000000000001C /* EventTitleTruncator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011C /* EventTitleTruncator.swift */; };
 		10000000000000000000001D /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011D /* LoginItemManager.swift */; };
+		10000000000000000000001E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011E /* AppIcon.icon */; };
 		100000000000000000000011 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* EventKit.framework */; };
 		100000000000000000000012 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000202 /* SwiftUI.framework */; };
 		100000000000000000000015 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000203 /* Carbon.framework */; };
@@ -89,6 +90,7 @@
 		10000000000000000000011B /* DateIconDebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateIconDebugSettings.swift; sourceTree = "<group>"; };
 		10000000000000000000011C /* EventTitleTruncator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTitleTruncator.swift; sourceTree = "<group>"; };
 		10000000000000000000011D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
+		10000000000000000000011E /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		100000000000000000000121 /* MenuBarLabelFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelFormatterTests.swift; sourceTree = "<group>"; };
 		100000000000000000000122 /* MenuBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBuilderTests.swift; sourceTree = "<group>"; };
 		100000000000000000000123 /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 				100000000000000000000808 /* MenuBar */,
 				100000000000000000000809 /* Settings */,
 				10000000000000000000080A /* Utilities */,
+				10000000000000000000080B /* Resources */,
 				100000000000000000000110 /* Info.plist */,
 				100000000000000000000111 /* Perch.entitlements */,
 			);
@@ -252,6 +255,14 @@
 			path = Utilities;
 			sourceTree = "<group>";
 		};
+		10000000000000000000080B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				10000000000000000000011E /* AppIcon.icon */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -333,6 +344,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				10000000000000000000001E /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,7 +541,7 @@
 		100000000000000000000C03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Perch/Perch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -555,7 +567,7 @@
 		100000000000000000000C04 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Perch/Perch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

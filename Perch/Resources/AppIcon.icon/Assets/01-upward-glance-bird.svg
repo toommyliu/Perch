@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description" shape-rendering="geometricPrecision">
+  <title id="title">Rising Day — layer 01 — Upward Glance bird</title>
+  <desc id="description">A soft peach bird rising behind the calendar, with a tiny eye and upward-pointing beak.</desc>
+  <ellipse cx="520" cy="358" rx="108" ry="118" transform="rotate(-8 520 358)" fill="#F2B08F"/>
+  <circle cx="563" cy="299" r="8" fill="#37352F"/>
+  <path d="M609 292L650 297L615 321Z" fill="#8E8376"/>
+</svg>

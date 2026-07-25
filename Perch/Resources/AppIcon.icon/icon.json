@@ -1,0 +1,60 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.91373,0.89804,0.87059,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "07-third-event-row.svg",
+          "name" : "07-third-event-row"
+        },
+        {
+          "glass" : false,
+          "image-name" : "06-second-event-row.svg",
+          "name" : "06-second-event-row"
+        },
+        {
+          "glass" : false,
+          "image-name" : "05-first-event-row.svg",
+          "name" : "05-first-event-row"
+        },
+        {
+          "glass" : false,
+          "image-name" : "04-bindings.svg",
+          "name" : "04-bindings"
+        },
+        {
+          "glass" : false,
+          "image-name" : "03-header-divider.svg",
+          "name" : "03-header-divider"
+        },
+        {
+          "glass" : false,
+          "image-name" : "02-calendar-card.svg",
+          "name" : "02-calendar-card"
+        },
+        {
+          "glass" : false,
+          "image-name" : "01-upward-glance-bird.svg",
+          "name" : "01-upward-glance-bird"
+        }
+      ],
+      "name" : "Rising Day",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}
