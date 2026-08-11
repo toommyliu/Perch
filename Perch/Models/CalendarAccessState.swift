@@ -27,7 +27,61 @@ enum ReminderAccessSettingsAction: Equatable {
     case openPrivacySettings
 }
 
+enum PermissionDisplayStatus: Equatable {
+    case granted
+    case notRequested
+    case fullAccessRequired
+    case denied
+    case restricted
+    case unavailable
+
+    var title: String {
+        switch self {
+        case .granted:
+            return "Permission Granted"
+        case .notRequested:
+            return "Not Requested"
+        case .fullAccessRequired:
+            return "Full Access Required"
+        case .denied:
+            return "Access Denied"
+        case .restricted:
+            return "Access Restricted"
+        case .unavailable:
+            return "Status Unavailable"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .granted:
+            return "checkmark.circle.fill"
+        case .notRequested:
+            return "circle.dashed"
+        case .fullAccessRequired, .denied, .restricted, .unavailable:
+            return "exclamationmark.circle.fill"
+        }
+    }
+}
+
 extension CalendarAccessState {
+    var permissionDisplayStatus: PermissionDisplayStatus {
+        switch self {
+        case .notDetermined:
+            return .notRequested
+        case .fullAccess:
+            return .granted
+        case .writeOnly:
+            return .fullAccessRequired
+        case .denied:
+            return .denied
+        case .restricted:
+            return .restricted
+        case .unknown:
+            return .unavailable
+        }
+    }
+
     var statusTitle: String {
         switch self {
         case .notDetermined:
@@ -79,6 +133,21 @@ extension CalendarAccessState {
 }
 
 extension ReminderAccessState {
+    var permissionDisplayStatus: PermissionDisplayStatus {
+        switch self {
+        case .notDetermined:
+            return .notRequested
+        case .fullAccess:
+            return .granted
+        case .denied:
+            return .denied
+        case .restricted:
+            return .restricted
+        case .unknown:
+            return .unavailable
+        }
+    }
+
     var isSufficientForReadingReminders: Bool {
         self == .fullAccess
     }

@@ -387,6 +387,38 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(changeCount, 1)
     }
 
+    func testRefreshingPermissionStatusesReadsCalendarAndReminderProviders() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let calendarProvider = FakePermissionProvider(state: .denied)
+        let permissionController = CalendarPermissionController(permissionProvider: calendarProvider)
+        let reminderProvider = FakeReminderPermissionProvider(state: .denied)
+        let reminderPermissionController = ReminderPermissionController(
+            permissionProvider: reminderProvider
+        )
+        let availableCalendarProvider = FakeCalendarEventProvider(calendars: [
+            CalendarInfo(id: "work", title: "Work", sourceTitle: "iCloud", color: .systemBlue)
+        ])
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            reminderPermissionController: reminderPermissionController,
+            calendarProvider: availableCalendarProvider,
+            onChange: {}
+        )
+
+        calendarProvider.state = .fullAccess
+        reminderProvider.state = .fullAccess
+        model.refreshPermissionStatuses()
+
+        XCTAssertEqual(model.accessState, .fullAccess)
+        XCTAssertEqual(model.reminderAccessState, .fullAccess)
+
+        await waitForAsyncModelUpdate {
+            model.availableCalendars.count == 1
+        }
+        XCTAssertEqual(availableCalendarProvider.availableCalendarsCallCount, 1)
+    }
+
     func testInitializesWithLaunchAtLoginState() {
         let settingsStore = SettingsStore(userDefaults: makeDefaults())
         let provider = FakePermissionProvider(state: .fullAccess)

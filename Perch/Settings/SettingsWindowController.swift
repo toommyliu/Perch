@@ -61,7 +61,7 @@ final class SettingsWindow: NSPanel {
 @MainActor
 final class SettingsWindowController: NSWindowController {
     private static let minimumContentHeight: CGFloat = 260
-    private static let maximumContentHeight: CGFloat = 680
+    private static let maximumContentHeight: CGFloat = 760
     private static let screenEdgeInset: CGFloat = 8
 
     var onSettingsChanged: (() -> Void)?
@@ -239,6 +239,7 @@ final class SettingsWindowController: NSWindowController {
         }
 
         permissionController.refreshStatus()
+        reminderPermissionController?.refreshStatus()
         viewModel?.refreshLaunchAtLoginState()
         viewModel?.refreshAvailableCalendars()
 

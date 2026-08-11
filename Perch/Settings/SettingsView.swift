@@ -257,6 +257,11 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    func refreshPermissionStatuses() {
+        accessState = permissionController.refreshStatus()
+        reminderAccessState = reminderPermissionController?.refreshStatus() ?? .unknown
+    }
+
     func isCalendarSelected(_ calendar: CalendarInfo) -> Bool {
         selectedCalendarIdentifiers?.contains(calendar.id) ?? true
     }
@@ -447,7 +452,7 @@ final class SettingsViewModel: ObservableObject {
 
 struct SettingsView: View {
     static let contentWidth: CGFloat = 420
-    private static let headerHeight: CGFloat = 50
+    private static let headerHeight: CGFloat = 42
     private static let panelCornerRadius: CGFloat = 14
     private static let contentHorizontalPadding: CGFloat = 18
     fileprivate static let shortcutRecorderWidth: CGFloat = 112
@@ -542,6 +547,7 @@ struct SettingsView: View {
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             eventSettings
+            permissionsSettings
             appSettings
             #if DEBUG
             developerSettings
@@ -676,11 +682,7 @@ struct SettingsView: View {
             title: "Agenda",
             subtitle: "Choose what appears in the tray menu and menu bar."
         ) {
-            if model.accessState.isSufficientForReadingEvents {
-                calendarSelectionRow
-            } else {
-                calendarAccessRow
-            }
+            calendarSelectionRow
 
             SettingsRowDivider()
 
@@ -732,11 +734,6 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
             }
 
-            if model.showReminders && !model.reminderAccessState.isSufficientForReadingReminders {
-                SettingsRowDivider()
-                reminderAccessRow
-            }
-
             SettingsRowDivider()
 
             SettingsRow(
@@ -750,60 +747,51 @@ struct SettingsView: View {
         }
     }
 
-    private var calendarAccessRow: some View {
-        SettingsRow(
-            title: "Calendar access",
-            detail: nil
+    private var permissionsSettings: some View {
+        SettingsSection(
+            title: "Permissions",
+            subtitle: "Access to calendar events and scheduled reminders."
         ) {
-            if model.isRequestingAccess {
-                ProgressView()
-                    .controlSize(.small)
-            } else if let actionTitle = model.accessActionTitle {
-                HStack(spacing: 10) {
-                    Text("Required")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
-                    Button(actionTitle) {
-                        model.performAccessAction()
-                    }
-                    .controlSize(.small)
-                }
-            } else {
-                Text("Unavailable")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            SettingsRow(title: "Calendar", detail: nil) {
+                PermissionAccessAccessory(
+                    status: model.accessState.permissionDisplayStatus,
+                    isRequesting: model.isRequestingAccess,
+                    actionTitle: model.accessActionTitle,
+                    action: model.performAccessAction
+                )
             }
-        }
-        .disabled(model.isRequestingAccess)
-    }
 
-    private var reminderAccessRow: some View {
-        SettingsRow(
-            title: "Reminders access",
-            detail: nil
-        ) {
-            if model.isRequestingReminderAccess {
-                ProgressView()
-                    .controlSize(.small)
-            } else if let actionTitle = model.reminderAccessActionTitle {
-                HStack(spacing: 10) {
-                    Text("Required")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            SettingsRowDivider()
 
-                    Button(actionTitle) {
-                        model.performReminderAccessAction()
-                    }
-                    .controlSize(.small)
-                }
-            } else {
-                Text("Unavailable")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            SettingsRow(title: "Reminders", detail: nil) {
+                PermissionAccessAccessory(
+                    status: model.reminderAccessState.permissionDisplayStatus,
+                    isRequesting: model.isRequestingReminderAccess,
+                    actionTitle: model.reminderAccessActionTitle,
+                    action: model.performReminderAccessAction
+                )
             }
+
+            SettingsRowDivider()
+
+            HStack(spacing: 12) {
+                Text("Changed access in System Settings?")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    model.refreshPermissionStatuses()
+                } label: {
+                    Label("Refresh Status", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, minHeight: 42)
         }
-        .disabled(model.isRequestingReminderAccess)
     }
 
     private var calendarSelectionRow: some View {
@@ -1470,6 +1458,49 @@ private struct SettingsRowDivider: View {
     var body: some View {
         Divider()
             .opacity(0.62)
+    }
+}
+
+private struct PermissionAccessAccessory: View {
+    let status: PermissionDisplayStatus
+    let isRequesting: Bool
+    let actionTitle: String?
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(spacing: 6) {
+                if isRequesting {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Text("Requesting Access…")
+                } else {
+                    Image(systemName: status.systemImage)
+                        .foregroundStyle(statusTint)
+
+                    Text(status.title)
+                }
+            }
+            .font(.callout)
+            .accessibilityElement(children: .combine)
+
+            if !isRequesting, let actionTitle {
+                Button(actionTitle, action: action)
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    private var statusTint: Color {
+        switch status {
+        case .granted:
+            return .green
+        case .notRequested:
+            return .secondary
+        case .fullAccessRequired, .denied, .restricted, .unavailable:
+            return .orange
+        }
     }
 }
 

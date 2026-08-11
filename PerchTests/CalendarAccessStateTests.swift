@@ -41,4 +41,30 @@ final class CalendarAccessStateTests: XCTestCase {
             XCTAssertFalse(accessState.isSufficientForReadingReminders)
         }
     }
+
+    func testPermissionDisplayStatusesDescribeCalendarAccess() {
+        XCTAssertEqual(CalendarAccessState.fullAccess.permissionDisplayStatus, .granted)
+        XCTAssertEqual(CalendarAccessState.notDetermined.permissionDisplayStatus, .notRequested)
+        XCTAssertEqual(CalendarAccessState.writeOnly.permissionDisplayStatus, .fullAccessRequired)
+        XCTAssertEqual(CalendarAccessState.denied.permissionDisplayStatus, .denied)
+        XCTAssertEqual(CalendarAccessState.restricted.permissionDisplayStatus, .restricted)
+        XCTAssertEqual(CalendarAccessState.unknown.permissionDisplayStatus, .unavailable)
+    }
+
+    func testPermissionDisplayStatusesDescribeReminderAccess() {
+        XCTAssertEqual(ReminderAccessState.fullAccess.permissionDisplayStatus, .granted)
+        XCTAssertEqual(ReminderAccessState.notDetermined.permissionDisplayStatus, .notRequested)
+        XCTAssertEqual(ReminderAccessState.denied.permissionDisplayStatus, .denied)
+        XCTAssertEqual(ReminderAccessState.restricted.permissionDisplayStatus, .restricted)
+        XCTAssertEqual(ReminderAccessState.unknown.permissionDisplayStatus, .unavailable)
+    }
+
+    func testPermissionDisplayStatusProvidesAccessibleLabelsAndSymbols() {
+        XCTAssertEqual(PermissionDisplayStatus.granted.title, "Permission Granted")
+        XCTAssertEqual(PermissionDisplayStatus.granted.systemImage, "checkmark.circle.fill")
+        XCTAssertEqual(PermissionDisplayStatus.notRequested.title, "Not Requested")
+        XCTAssertEqual(PermissionDisplayStatus.notRequested.systemImage, "circle.dashed")
+        XCTAssertEqual(PermissionDisplayStatus.denied.title, "Access Denied")
+        XCTAssertEqual(PermissionDisplayStatus.denied.systemImage, "exclamationmark.circle.fill")
+    }
 }
