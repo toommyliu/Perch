@@ -4,6 +4,7 @@ import Foundation
 enum MenuBarLabelContent: Equatable {
     case dateIcon(day: Int)
     case event(title: String, relativeText: String, color: NSColor?)
+    case reminder(title: String, relativeText: String)
 
     static func == (lhs: MenuBarLabelContent, rhs: MenuBarLabelContent) -> Bool {
         switch (lhs, rhs) {
@@ -23,6 +24,8 @@ enum MenuBarLabelContent: Equatable {
             return lhsTitle == rhsTitle
                 && lhsRelativeText == rhsRelativeText
                 && colorsMatch
+        case let (.reminder(lhsTitle, lhsRelativeText), .reminder(rhsTitle, rhsRelativeText)):
+            return lhsTitle == rhsTitle && lhsRelativeText == rhsRelativeText
         default:
             return false
         }
@@ -39,48 +42,49 @@ struct MenuBarLabelFormatter {
 
     func labelContent(
         events: [CalendarEvent],
+        reminders: [CalendarReminder] = [],
         settings: CalendarMenubarSettings,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> MenuBarLabelContent {
         let day = calendar.component(.day, from: now)
 
-        guard settings.displayMode != .never,
-              let nextEvent = CalendarEventVisibility.upcomingEvents(
-                from: events,
-                includeAllDayEvents: settings.showAllDayEvents,
-                selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
+        guard let nextItem = AgendaItemVisibility.visibleItems(
+            events: events,
+            reminders: reminders,
+            includeAllDayEvents: settings.showAllDayEvents,
+            includeReminders: settings.showReminders,
+            selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
+            now: now,
+            calendar: calendar
+        ).first,
+              AgendaItemVisibility.shouldPrioritize(
+                nextItem,
+                displayMode: settings.displayMode,
                 now: now
-              ).first
+              )
         else {
             return .dateIcon(day: day)
         }
 
-        guard shouldShow(nextEvent, mode: settings.displayMode, now: now) else {
-            return .dateIcon(day: day)
+        switch nextItem {
+        case let .event(event):
+            return .event(
+                title: EventTitleTruncator.truncate(event.title, maxLength: maxTitleLength),
+                relativeText: relativeText(
+                    for: event,
+                    mode: settings.displayMode,
+                    now: now,
+                    calendar: calendar
+                ),
+                color: settings.showEventColors ? event.calendarColor : .perchMutedWhite
+            )
+        case let .reminder(reminder):
+            return .reminder(
+                title: EventTitleTruncator.truncate(reminder.title, maxLength: maxTitleLength),
+                relativeText: relativeText(for: reminder, now: now, calendar: calendar)
+            )
         }
-
-        return .event(
-            title: EventTitleTruncator.truncate(nextEvent.title, maxLength: maxTitleLength),
-            relativeText: relativeText(for: nextEvent, mode: settings.displayMode, now: now, calendar: calendar),
-            color: settings.showEventColors ? nextEvent.calendarColor : .perchMutedWhite
-        )
-    }
-
-    private func shouldShow(_ event: CalendarEvent, mode: MenuBarDisplayMode, now: Date) -> Bool {
-        if mode == .always {
-            return true
-        }
-
-        if event.startDate <= now && event.endDate >= now {
-            return true
-        }
-
-        guard let leadTime = mode.leadTime else {
-            return true
-        }
-
-        return event.startDate <= now.addingTimeInterval(leadTime)
     }
 
     private func relativeText(
@@ -109,6 +113,23 @@ struct MenuBarLabelFormatter {
 
     private func futureRelativeText(from now: Date, to startDate: Date) -> String {
         "in \(compactDuration(startDate.timeIntervalSince(now)))"
+    }
+
+    private func relativeText(
+        for reminder: CalendarReminder,
+        now: Date,
+        calendar: Calendar
+    ) -> String {
+        if reminder.isAllDay, calendar.isDate(reminder.dueDate, inSameDayAs: now) {
+            return "Due today"
+        }
+
+        if reminder.dueDate <= now {
+            let elapsed = now.timeIntervalSince(reminder.dueDate)
+            return elapsed < 60 ? "Due now" : "\(compactDuration(elapsed)) overdue"
+        }
+
+        return futureRelativeText(from: now, to: reminder.dueDate)
     }
 
     private func remainingRelativeText(from now: Date, to endDate: Date) -> String {

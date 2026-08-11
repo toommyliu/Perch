@@ -78,6 +78,7 @@ final class SettingsWindowController: NSWindowController {
 
     private let settingsStore: SettingsStore
     private let permissionController: CalendarPermissionController
+    private let reminderPermissionController: ReminderPermissionController?
     private let calendarProvider: CalendarEventProviding
     private let loginItemManager: LoginItemManaging
     #if DEBUG
@@ -99,10 +100,12 @@ final class SettingsWindowController: NSWindowController {
         permissionController: CalendarPermissionController,
         calendarProvider: CalendarEventProviding,
         loginItemManager: LoginItemManaging,
+        reminderPermissionController: ReminderPermissionController? = nil,
         dateIconDebugSettings: DateIconDebugSettings
     ) {
         self.settingsStore = settingsStore
         self.permissionController = permissionController
+        self.reminderPermissionController = reminderPermissionController
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
         self.dateIconDebugSettings = dateIconDebugSettings
@@ -113,10 +116,12 @@ final class SettingsWindowController: NSWindowController {
         settingsStore: SettingsStore,
         permissionController: CalendarPermissionController,
         calendarProvider: CalendarEventProviding,
-        loginItemManager: LoginItemManaging
+        loginItemManager: LoginItemManaging,
+        reminderPermissionController: ReminderPermissionController? = nil
     ) {
         self.settingsStore = settingsStore
         self.permissionController = permissionController
+        self.reminderPermissionController = reminderPermissionController
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
         super.init(window: nil)
@@ -133,6 +138,7 @@ final class SettingsWindowController: NSWindowController {
         let viewModel = SettingsViewModel(
             settingsStore: settingsStore,
             permissionController: permissionController,
+            reminderPermissionController: reminderPermissionController,
             calendarProvider: calendarProvider,
             loginItemManager: loginItemManager,
             dateIconDebugSettings: dateIconDebugSettings,
@@ -144,6 +150,7 @@ final class SettingsWindowController: NSWindowController {
         let viewModel = SettingsViewModel(
             settingsStore: settingsStore,
             permissionController: permissionController,
+            reminderPermissionController: reminderPermissionController,
             calendarProvider: calendarProvider,
             loginItemManager: loginItemManager,
             onShortcutChangeRequested: shortcutChangeHandler,

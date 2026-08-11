@@ -2,7 +2,7 @@ import AppKit
 import EventKit
 import Foundation
 
-final class EventKitCalendarProvider: CalendarProviding {
+final class EventKitCalendarProvider: AgendaProviding {
     private let eventStore: EventStoreBox
     private let meetingLinkExtractor = MeetingLinkExtractor()
     private let queryQueue = DispatchQueue(
@@ -50,6 +50,44 @@ final class EventKitCalendarProvider: CalendarProviding {
         }
 
         return granted ? .fullAccess : authorizationState()
+    }
+
+    func reminderAuthorizationState() -> ReminderAccessState {
+        switch EKEventStore.authorizationStatus(for: .reminder) {
+        case .notDetermined:
+            return .notDetermined
+        case .restricted:
+            return .restricted
+        case .denied:
+            return .denied
+        case .fullAccess, .authorized:
+            return .fullAccess
+        case .writeOnly:
+            return .unknown
+        @unknown default:
+            return .unknown
+        }
+    }
+
+    func requestFullReminderAccess() async -> ReminderAccessState {
+        let granted: Bool
+
+        do {
+            granted = try await eventStore.value.requestFullAccessToReminders()
+        } catch {
+            let error = error as NSError
+            PerchLog.calendar.error(
+                """
+                Reminders access request failed: \
+                domain=\(error.domain, privacy: .public) \
+                code=\(error.code) \
+                error=\(error.localizedDescription, privacy: .private)
+                """
+            )
+            return reminderAuthorizationState()
+        }
+
+        return granted ? .fullAccess : reminderAuthorizationState()
     }
 
     func availableCalendars() async throws -> [CalendarInfo] {
@@ -117,6 +155,26 @@ final class EventKitCalendarProvider: CalendarProviding {
         }
     }
 
+    func reminders(from startDate: Date, to endDate: Date) async -> [CalendarReminder] {
+        await withCheckedContinuation { continuation in
+            queryQueue.async { [eventStore] in
+                let calendars = eventStore.value.calendars(for: .reminder)
+                let predicate = eventStore.value.predicateForIncompleteReminders(
+                    withDueDateStarting: startDate,
+                    ending: endDate,
+                    calendars: calendars
+                )
+                eventStore.value.fetchReminders(matching: predicate) { reminders in
+                    let reminders = (reminders ?? [])
+                        .filter { !$0.isCompleted }
+                        .compactMap { Self.calendarReminder(from: $0) }
+                        .sorted(by: Self.isReminderOrderedBefore)
+                    continuation.resume(returning: reminders)
+                }
+            }
+        }
+    }
+
     private static func isOrderedBefore(_ lhs: CalendarInfo, _ rhs: CalendarInfo) -> Bool {
         let sourceComparison = lhs.sourceTitle.localizedCaseInsensitiveCompare(rhs.sourceTitle)
         if sourceComparison != .orderedSame {
@@ -138,6 +196,41 @@ final class EventKitCalendarProvider: CalendarProviding {
 
         if lhs.endDate != rhs.endDate {
             return lhs.endDate < rhs.endDate
+        }
+
+        return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+    }
+
+    private static func calendarReminder(from reminder: EKReminder) -> CalendarReminder? {
+        guard let components = reminder.dueDateComponents,
+              let dueDate = reminderDate(from: components)
+        else {
+            return nil
+        }
+
+        return CalendarReminder(
+            id: reminder.calendarItemIdentifier,
+            title: reminder.title?.isEmpty == false ? reminder.title : "Untitled",
+            dueDate: dueDate,
+            isAllDay: components.hour == nil && components.minute == nil && components.second == nil,
+            listTitle: reminder.calendar.title,
+            listIdentifier: reminder.calendar.calendarIdentifier
+        )
+    }
+
+    private static func reminderDate(from components: DateComponents) -> Date? {
+        var calendar = components.calendar ?? Calendar(identifier: .gregorian)
+        calendar.timeZone = components.timeZone ?? .current
+
+        var normalizedComponents = components
+        normalizedComponents.calendar = calendar
+        normalizedComponents.timeZone = calendar.timeZone
+        return calendar.date(from: normalizedComponents)
+    }
+
+    private static func isReminderOrderedBefore(_ lhs: CalendarReminder, _ rhs: CalendarReminder) -> Bool {
+        if lhs.dueDate != rhs.dueDate {
+            return lhs.dueDate < rhs.dueDate
         }
 
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending

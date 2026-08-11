@@ -255,6 +255,79 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .dateIcon(day: 6))
     }
 
+    func testScheduledReminderWithinSixHoursReplacesDateIcon() {
+        let now = date(hour: 9, minute: 0)
+        let reminder = makeReminder(title: "Reset", due: date(hour: 14, minute: 0))
+
+        let content = formatter.labelContent(
+            events: [],
+            reminders: [reminder],
+            settings: CalendarMenubarSettings(
+                displayMode: .within6Hours,
+                lookAheadDays: 3,
+                showReminders: true
+            ),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(content, .reminder(title: "Reset", relativeText: "in 5h 0m"))
+    }
+
+    func testDisabledReminderDoesNotReplaceDateIcon() {
+        let now = date(hour: 9, minute: 0)
+        let reminder = makeReminder(title: "Reset", due: date(hour: 10, minute: 0))
+
+        let content = formatter.labelContent(
+            events: [],
+            reminders: [reminder],
+            settings: .defaultValue,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(content, .dateIcon(day: 6))
+    }
+
+    func testEarlierCalendarEventStillDrivesStatusPresentation() {
+        let now = date(hour: 9, minute: 0)
+        let event = makeEvent(start: date(hour: 10, minute: 0), end: date(hour: 11, minute: 0))
+        let reminder = makeReminder(title: "Reset", due: date(hour: 14, minute: 0))
+
+        let content = formatter.labelContent(
+            events: [event],
+            reminders: [reminder],
+            settings: CalendarMenubarSettings(
+                displayMode: .within6Hours,
+                lookAheadDays: 3,
+                showReminders: true
+            ),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(content, .event(title: "CMPE172", relativeText: "in 1h 0m", color: .systemBlue))
+    }
+
+    func testEarlierTodayReminderShowsAsOverdue() {
+        let now = date(hour: 9, minute: 0)
+        let reminder = makeReminder(title: "Reset", due: date(hour: 8, minute: 0))
+
+        let content = formatter.labelContent(
+            events: [],
+            reminders: [reminder],
+            settings: CalendarMenubarSettings(
+                displayMode: .within6Hours,
+                lookAheadDays: 3,
+                showReminders: true
+            ),
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(content, .reminder(title: "Reset", relativeText: "1h 0m overdue"))
+    }
+
     func testLongTitleTruncatesWhilePreservingRelativeTime() {
         let now = date(hour: 9, minute: 0)
         let event = makeEvent(
@@ -291,6 +364,17 @@ final class MenuBarLabelFormatterTests: XCTestCase {
             calendarTitle: "School",
             calendarColor: .systemBlue,
             calendarIdentifier: calendarIdentifier
+        )
+    }
+
+    private func makeReminder(title: String, due: Date) -> CalendarReminder {
+        CalendarReminder(
+            id: UUID().uuidString,
+            title: title,
+            dueDate: due,
+            isAllDay: false,
+            listTitle: "Reminders",
+            listIdentifier: "reminders"
         )
     }
 

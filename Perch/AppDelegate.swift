@@ -21,13 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         let settingsStore = SettingsStore(userDefaults: userDefaults)
         #if DEBUG
-        let calendarProvider: CalendarProviding = usesDemoData
+        let calendarProvider: AgendaProviding = usesDemoData
             ? DemoCalendarProvider()
             : EventKitCalendarProvider()
         #else
         let calendarProvider = EventKitCalendarProvider()
         #endif
         let permissionController = CalendarPermissionController(permissionProvider: calendarProvider)
+        let reminderPermissionController = ReminderPermissionController(permissionProvider: calendarProvider)
         let loginItemManager = LoginItemManager()
         #if DEBUG
         let dateIconDebugSettings = DateIconDebugSettings()
@@ -36,11 +37,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionController: permissionController,
             calendarProvider: calendarProvider,
             loginItemManager: loginItemManager,
+            reminderPermissionController: reminderPermissionController,
             dateIconDebugSettings: dateIconDebugSettings
         )
         let menuBarController = MenuBarController(
             calendarProvider: calendarProvider,
             permissionController: permissionController,
+            reminderProvider: calendarProvider,
+            reminderPermissionController: reminderPermissionController,
             settingsStore: settingsStore,
             settingsWindowController: settingsWindowController,
             dateIconDebugSettings: dateIconDebugSettings
@@ -53,11 +57,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsStore: settingsStore,
             permissionController: permissionController,
             calendarProvider: calendarProvider,
-            loginItemManager: loginItemManager
+            loginItemManager: loginItemManager,
+            reminderPermissionController: reminderPermissionController
         )
         let menuBarController = MenuBarController(
             calendarProvider: calendarProvider,
             permissionController: permissionController,
+            reminderProvider: calendarProvider,
+            reminderPermissionController: reminderPermissionController,
             settingsStore: settingsStore,
             settingsWindowController: settingsWindowController
         )

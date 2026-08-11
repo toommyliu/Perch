@@ -172,6 +172,63 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows.map(\.title), ["10:00\u{202F}AM · Timed"])
     }
 
+    func testScheduledReminderAppearsAsPrioritizedAgendaItem() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let reminders = [
+            reminder(title: "Reset", due: date(day: 6, hour: 14, minute: 0))
+        ]
+
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: [],
+            reminders: reminders,
+            showReminders: true,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.sections.map(\.title), ["Due in 5 h"])
+        XCTAssertEqual(snapshot.sections[0].rows.map(\.title), ["2:00\u{202F}PM · Reset"])
+        XCTAssertEqual(snapshot.sections[0].rows[0].systemSymbolName, "circle")
+        XCTAssertEqual(snapshot.sections[0].rows[0].action, .openReminders)
+    }
+
+    func testReminderDueEarlierTodayRemainsVisibleUntilTheDayEnds() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let reminders = [
+            reminder(title: "Earlier", due: date(day: 6, hour: 8, minute: 0))
+        ]
+
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: [],
+            reminders: reminders,
+            showReminders: true,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.sections[0].title, "Overdue by 1 h")
+        XCTAssertEqual(snapshot.sections[0].rows.map(\.title), ["8:00\u{202F}AM · Earlier"])
+    }
+
+    func testRemindersStayHiddenWhenDisabled() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let reminders = [
+            reminder(title: "Reset", due: date(day: 6, hour: 14, minute: 0))
+        ]
+
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: [],
+            reminders: reminders,
+            now: now,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.sections[0].rows[0].title, "No upcoming events")
+    }
+
     func testEventsFromUnselectedCalendarsAreExcluded() {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
@@ -323,11 +380,14 @@ final class MenuBuilderTests: XCTestCase {
 
         XCTAssertEqual(visibleFooterRows[1].keyEquivalent, ",")
         XCTAssertEqual(visibleFooterRows[1].keyEquivalentModifierMask, [.command])
+
+        XCTAssertEqual(visibleFooterRows[2].keyEquivalent, "q")
+        XCTAssertEqual(visibleFooterRows[2].keyEquivalentModifierMask, [.command])
         XCTAssertEqual(snapshot.footerRows.filter(\.isSeparator).count, 1)
     }
 
     @MainActor
-    func testDayLabelsUseNoninteractiveStandardMenuTypography() {
+    func testAgendaLabelsUseNoninteractiveSectionHeaders() {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
             event(title: "Ongoing Event", start: date(day: 6, hour: 8, minute: 30), end: date(day: 6, hour: 9, minute: 30)),
@@ -347,7 +407,7 @@ final class MenuBuilderTests: XCTestCase {
         for section in snapshot.sections {
             let header = menu.items.first { $0.title == section.title }
             XCTAssertNotNil(header)
-            XCTAssertFalse(header?.isSectionHeader ?? true)
+            XCTAssertTrue(header?.isSectionHeader ?? false)
             XCTAssertFalse(header?.isEnabled ?? true)
             XCTAssertNil(header?.action)
         }
@@ -401,6 +461,16 @@ final class MenuBuilderTests: XCTestCase {
     }
 
     @MainActor
+    func testMenuPerformsCommandQWhileOpen() {
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: [], now: Date(), calendar: calendar)
+        let target = MenuShortcutTarget()
+        let menu = builder.makeMenu(from: snapshot, target: target)
+
+        XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: "q", modifierFlags: [.command])))
+        XCTAssertEqual(target.quitCount, 1)
+    }
+
+    @MainActor
     func testMenuLeavesNavigationKeysToNativeMenuTracking() {
         let snapshot = builder.snapshot(accessState: .fullAccess, events: [], now: Date(), calendar: calendar)
         let menu = builder.makeMenu(from: snapshot, target: MenuShortcutTarget())
@@ -424,6 +494,25 @@ final class MenuBuilderTests: XCTestCase {
         menu.performActionForItem(at: 1)
 
         XCTAssertEqual(target.openCalendarEventCount, 1)
+    }
+
+    @MainActor
+    func testMenuItemPerformsOpenReminders() {
+        let now = date(day: 6, hour: 9, minute: 0)
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: [],
+            reminders: [reminder(title: "Reset", due: date(day: 6, hour: 14, minute: 0))],
+            showReminders: true,
+            now: now,
+            calendar: calendar
+        )
+        let target = MenuShortcutTarget()
+        let menu = builder.makeMenu(from: snapshot, target: target)
+
+        menu.performActionForItem(at: 1)
+
+        XCTAssertEqual(target.openRemindersCount, 1)
     }
 
     @MainActor
@@ -598,6 +687,21 @@ final class MenuBuilderTests: XCTestCase {
         )
     }
 
+    private func reminder(
+        title: String,
+        due: Date,
+        isAllDay: Bool = false
+    ) -> CalendarReminder {
+        CalendarReminder(
+            id: UUID().uuidString,
+            title: title,
+            dueDate: due,
+            isAllDay: isAllDay,
+            listTitle: "Reminders",
+            listIdentifier: "reminders"
+        )
+    }
+
     private func date(day: Int, hour: Int, minute: Int) -> Date {
         var components = DateComponents()
         components.calendar = calendar
@@ -628,14 +732,20 @@ final class MenuBuilderTests: XCTestCase {
 
 private final class MenuShortcutTarget: NSObject {
     private(set) var openCalendarCount = 0
+    private(set) var openRemindersCount = 0
     private(set) var openCalendarEventCount = 0
     private(set) var joinMeetingCount = 0
     private(set) var copyMeetingLinkCount = 0
     private(set) var openSettingsCount = 0
     private(set) var closeMenuCount = 0
+    private(set) var quitCount = 0
 
     @objc func openCalendarApp() {
         openCalendarCount += 1
+    }
+
+    @objc func openRemindersApp() {
+        openRemindersCount += 1
     }
 
     @objc func openCalendarEvent(_ sender: NSMenuItem) {
@@ -656,5 +766,9 @@ private final class MenuShortcutTarget: NSObject {
 
     @objc func closeTrayMenuFromMenuItem() {
         closeMenuCount += 1
+    }
+
+    @objc func quit() {
+        quitCount += 1
     }
 }

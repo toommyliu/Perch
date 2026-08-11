@@ -8,7 +8,9 @@ final class MenuBarController: NSObject {
 
     private let statusItem: NSStatusItem
     private let calendarProvider: CalendarEventProviding
+    private let reminderProvider: ReminderEventProviding?
     private let permissionController: CalendarPermissionController
+    private let reminderPermissionController: ReminderPermissionController?
     private let settingsStore: SettingsStore
     private let settingsWindowController: SettingsWindowController
     private let labelFormatter = MenuBarLabelFormatter()
@@ -23,10 +25,14 @@ final class MenuBarController: NSObject {
     #endif
 
     private var allEvents: [CalendarEvent] = []
+    private var allReminders: [CalendarReminder] = []
     private var accessState: CalendarAccessState = .unknown
+    private var reminderAccessState: ReminderAccessState = .unknown
     private var accessStateCancellable: AnyCancellable?
+    private var reminderAccessStateCancellable: AnyCancellable?
     private var lastRefreshFailed = false
     private var lastFetchedLookAheadDays: Int?
+    private var lastFetchedShowReminders: Bool?
     private var presentedMenu: NSMenu?
     private var statusItemPresentation: StatusItemPresentation?
     private var isTrayMenuOpen = false
@@ -39,12 +45,16 @@ final class MenuBarController: NSObject {
     init(
         calendarProvider: CalendarEventProviding,
         permissionController: CalendarPermissionController,
+        reminderProvider: ReminderEventProviding? = nil,
+        reminderPermissionController: ReminderPermissionController? = nil,
         settingsStore: SettingsStore,
         settingsWindowController: SettingsWindowController,
         dateIconDebugSettings: DateIconDebugSettings
     ) {
         self.calendarProvider = calendarProvider
         self.permissionController = permissionController
+        self.reminderProvider = reminderProvider
+        self.reminderPermissionController = reminderPermissionController
         self.settingsStore = settingsStore
         self.settingsWindowController = settingsWindowController
         self.dateIconDebugSettings = dateIconDebugSettings
@@ -56,11 +66,15 @@ final class MenuBarController: NSObject {
     init(
         calendarProvider: CalendarEventProviding,
         permissionController: CalendarPermissionController,
+        reminderProvider: ReminderEventProviding? = nil,
+        reminderPermissionController: ReminderPermissionController? = nil,
         settingsStore: SettingsStore,
         settingsWindowController: SettingsWindowController
     ) {
         self.calendarProvider = calendarProvider
         self.permissionController = permissionController
+        self.reminderProvider = reminderProvider
+        self.reminderPermissionController = reminderPermissionController
         self.settingsStore = settingsStore
         self.settingsWindowController = settingsWindowController
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -76,17 +90,22 @@ final class MenuBarController: NSObject {
         }
         settingsWindowController.onSettingsChanged = { [weak self] in
             guard let self else { return }
-            let currentLookAheadDays = settingsStore.settings.lookAheadDays
-            let shouldRefetch = lastFetchedLookAheadDays.map {
-                $0 != currentLookAheadDays
+            let settings = settingsStore.settings
+            let lookAheadChanged = lastFetchedLookAheadDays.map {
+                $0 != settings.lookAheadDays
+            } ?? false
+            let remindersVisibilityChanged = lastFetchedShowReminders.map {
+                $0 != settings.showReminders
             } ?? false
             syncPresentation()
-            if shouldRefetch {
+            if lookAheadChanged || remindersVisibilityChanged {
                 refresh()
             }
         }
         accessState = permissionController.refreshStatus()
+        reminderAccessState = reminderPermissionController?.refreshStatus() ?? .unknown
         observeAccessStateChanges()
+        observeReminderAccessStateChanges()
         syncPresentation()
     }
 
@@ -102,6 +121,28 @@ final class MenuBarController: NSObject {
                 syncPresentation()
 
                 if readabilityChanged {
+                    refresh()
+                }
+            }
+    }
+
+    private func observeReminderAccessStateChanges() {
+        guard let reminderPermissionController else { return }
+
+        reminderAccessStateCancellable = reminderPermissionController.$accessState
+            .removeDuplicates()
+            .sink { [weak self] newAccessState in
+                guard let self, reminderAccessState != newAccessState else { return }
+
+                let readabilityChanged = reminderAccessState.isSufficientForReadingReminders
+                    != newAccessState.isSufficientForReadingReminders
+                reminderAccessState = newAccessState
+                if !newAccessState.isSufficientForReadingReminders {
+                    allReminders = []
+                    syncPresentation()
+                }
+
+                if readabilityChanged, settingsStore.settings.showReminders {
                     refresh()
                 }
             }
@@ -198,8 +239,10 @@ final class MenuBarController: NSObject {
 
     private func refreshCalendarData() async {
         accessState = permissionController.refreshStatus()
+        reminderAccessState = reminderPermissionController?.refreshStatus() ?? .unknown
         guard accessState.isSufficientForReadingEvents else {
             allEvents = []
+            allReminders = []
             lastRefreshFailed = false
             syncPresentation()
             return
@@ -207,10 +250,13 @@ final class MenuBarController: NSObject {
 
         let now = Date()
         let startDate = Calendar.current.startOfDay(for: now)
-        let lookAheadDays = settingsStore.settings.lookAheadDays
+        let settings = settingsStore.settings
+        let lookAheadDays = settings.lookAheadDays
         lastFetchedLookAheadDays = lookAheadDays
+        lastFetchedShowReminders = settings.showReminders
         let endDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startDate)
             ?? now.addingTimeInterval(TimeInterval(lookAheadDays * 24 * 60 * 60))
+        allReminders = []
         do {
             allEvents = try await calendarProvider.events(
                 from: startDate,
@@ -235,11 +281,19 @@ final class MenuBarController: NSObject {
             return
         }
 
+        if settings.showReminders,
+           reminderAccessState.isSufficientForReadingReminders,
+           let reminderProvider
+        {
+            allReminders = await reminderProvider.reminders(from: startDate, to: endDate)
+        }
+
         if lastRefreshFailed {
             PerchLog.calendar.notice(
                 """
                 Event refresh recovered: \
                 eventCount=\(self.allEvents.count) \
+                reminderCount=\(self.allReminders.count) \
                 lookAheadDays=\(lookAheadDays)
                 """
             )
@@ -257,9 +311,11 @@ final class MenuBarController: NSObject {
         let snapshot = menuBuilder.snapshot(
             accessState: accessState,
             events: allEvents,
+            reminders: allReminders,
             globalShortcut: settings.globalShortcut,
             showEventColors: settings.showEventColors,
             showAllDayEvents: settings.showAllDayEvents,
+            showReminders: settings.showReminders,
             selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
             displayMode: settings.displayMode
         )
@@ -283,7 +339,11 @@ final class MenuBarController: NSObject {
         }
         #endif
 
-        switch labelFormatter.labelContent(events: allEvents, settings: settingsStore.settings) {
+        switch labelFormatter.labelContent(
+            events: allEvents,
+            reminders: allReminders,
+            settings: settingsStore.settings
+        ) {
         case let .dateIcon(day):
             #if DEBUG
             setStatusItemPresentation(.dateIcon(day: day, options: .defaultValue))
@@ -292,6 +352,8 @@ final class MenuBarController: NSObject {
             #endif
         case let .event(title, relativeText, color):
             setStatusItemPresentation(.event(title: title, relativeText: relativeText, color: color))
+        case let .reminder(title, relativeText):
+            setStatusItemPresentation(.reminder(title: title, relativeText: relativeText))
         }
     }
 
@@ -317,6 +379,11 @@ final class MenuBarController: NSObject {
             button.imagePosition = .imageLeading
             button.image = color.map { MenuIconRenderer.colorBar(color: $0) }
             button.title = "\(color == nil ? "" : " ")\(title) · \(relativeText)"
+        case let .reminder(title, relativeText):
+            statusItem.length = NSStatusItem.variableLength
+            button.imagePosition = .imageLeading
+            button.image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Reminder")
+            button.title = " \(title) · \(relativeText)"
         }
     }
 
@@ -336,6 +403,10 @@ final class MenuBarController: NSObject {
 
     @objc func openCalendarApp() {
         openCalendarAppFallback()
+    }
+
+    @objc func openRemindersApp() {
+        openApplication(bundleIdentifier: "com.apple.reminders", displayName: "Reminders")
     }
 
     @objc func openCalendarEvent(_ sender: NSMenuItem) {
@@ -373,8 +444,12 @@ final class MenuBarController: NSObject {
     }
 
     private func openCalendarAppFallback() {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") else {
-            PerchLog.actions.error("Calendar launch failed: reason=applicationNotFound")
+        openApplication(bundleIdentifier: "com.apple.iCal", displayName: "Calendar")
+    }
+
+    private func openApplication(bundleIdentifier: String, displayName: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else {
+            PerchLog.actions.error("\(displayName, privacy: .public) launch failed: reason=applicationNotFound")
             return
         }
         NSWorkspace.shared.openApplication(at: url, configuration: .init()) { _, error in
@@ -382,7 +457,7 @@ final class MenuBarController: NSObject {
             let nsError = error as NSError
             PerchLog.actions.error(
                 """
-                Calendar launch failed: \
+                \(displayName, privacy: .public) launch failed: \
                 domain=\(nsError.domain, privacy: .public) \
                 code=\(nsError.code) \
                 error=\(nsError.localizedDescription, privacy: .private)
@@ -457,6 +532,7 @@ private enum StatusItemPresentation: Equatable {
     case dateIcon(day: Int)
     #endif
     case event(title: String, relativeText: String, color: NSColor?)
+    case reminder(title: String, relativeText: String)
 
     static func == (lhs: StatusItemPresentation, rhs: StatusItemPresentation) -> Bool {
         switch (lhs, rhs) {
@@ -475,6 +551,8 @@ private enum StatusItemPresentation: Equatable {
             default: colorsMatch = false
             }
             return lhsTitle == rhsTitle && lhsRelativeText == rhsRelativeText && colorsMatch
+        case let (.reminder(lhsTitle, lhsRelativeText), .reminder(rhsTitle, rhsRelativeText)):
+            return lhsTitle == rhsTitle && lhsRelativeText == rhsRelativeText
         default:
             return false
         }

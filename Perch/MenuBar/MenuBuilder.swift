@@ -5,6 +5,7 @@ enum CalendarMenuAction: Equatable {
     case requestAccess
     case openPrivacySettings
     case openCalendar
+    case openReminders
     case openEvent(eventIdentifier: String, startDate: Date)
     case joinMeeting(MeetingLink)
     case copyMeetingLink(URL)
@@ -18,6 +19,7 @@ struct CalendarMenuRow: Equatable {
     let toolTip: String?
     let isEnabled: Bool
     let color: NSColor?
+    let systemSymbolName: String?
     let action: CalendarMenuAction?
     let keyEquivalent: String
     let keyEquivalentModifierMask: NSEvent.ModifierFlags
@@ -32,6 +34,7 @@ struct CalendarMenuRow: Equatable {
         toolTip: String? = nil,
         isEnabled: Bool,
         color: NSColor?,
+        systemSymbolName: String? = nil,
         action: CalendarMenuAction?,
         keyEquivalent: String = "",
         keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
@@ -45,6 +48,7 @@ struct CalendarMenuRow: Equatable {
         self.toolTip = toolTip
         self.isEnabled = isEnabled
         self.color = color
+        self.systemSymbolName = systemSymbolName
         self.action = action
         self.keyEquivalent = keyEquivalent
         self.keyEquivalentModifierMask = keyEquivalentModifierMask
@@ -74,6 +78,7 @@ struct CalendarMenuRow: Equatable {
             && lhs.toolTip == rhs.toolTip
             && lhs.isEnabled == rhs.isEnabled
             && colorsMatch
+            && lhs.systemSymbolName == rhs.systemSymbolName
             && lhs.action == rhs.action
             && lhs.keyEquivalent == rhs.keyEquivalent
             && lhs.keyEquivalentModifierMask == rhs.keyEquivalentModifierMask
@@ -154,9 +159,11 @@ struct MenuBuilder {
     func snapshot(
         accessState: CalendarAccessState,
         events: [CalendarEvent],
+        reminders: [CalendarReminder] = [],
         globalShortcut: GlobalShortcut = .defaultValue,
         showEventColors: Bool = true,
         showAllDayEvents: Bool = true,
+        showReminders: Bool = false,
         selectedCalendarIdentifiers: Set<String>? = nil,
         displayMode: MenuBarDisplayMode = .within6Hours,
         now: Date = Date(),
@@ -190,11 +197,13 @@ struct MenuBuilder {
                 footerRows: standardFooterRows(globalShortcut: globalShortcut)
             )
         case .fullAccess:
-            return eventsSnapshot(
+            return agendaSnapshot(
                 events: events,
+                reminders: reminders,
                 globalShortcut: globalShortcut,
                 showEventColors: showEventColors,
                 showAllDayEvents: showAllDayEvents,
+                showReminders: showReminders,
                 selectedCalendarIdentifiers: selectedCalendarIdentifiers,
                 displayMode: displayMode,
                 now: now,
@@ -209,7 +218,7 @@ struct MenuBuilder {
 
         for section in snapshot.sections {
             if !section.title.isEmpty {
-                let header = NSMenuItem(title: section.title, action: nil, keyEquivalent: "")
+                let header = NSMenuItem.sectionHeader(title: section.title)
                 header.isEnabled = false
                 menu.addItem(header)
             }
@@ -259,48 +268,55 @@ struct MenuBuilder {
                 allowsKeyEquivalentWhenHidden: true
             ),
             .separator,
-            CalendarMenuRow(title: "Quit Perch Completely", isEnabled: true, color: nil, action: .quit)
+            CalendarMenuRow(
+                title: "Quit Perch Completely",
+                isEnabled: true,
+                color: nil,
+                action: .quit,
+                keyEquivalent: "q",
+                keyEquivalentModifierMask: [.command]
+            )
         ]
     }
 
-    private func eventsSnapshot(
+    private func agendaSnapshot(
         events: [CalendarEvent],
+        reminders: [CalendarReminder],
         globalShortcut: GlobalShortcut,
         showEventColors: Bool,
         showAllDayEvents: Bool,
+        showReminders: Bool,
         selectedCalendarIdentifiers: Set<String>?,
         displayMode: MenuBarDisplayMode,
         now: Date,
         calendar: Calendar
     ) -> CalendarMenuSnapshot {
-        if selectedCalendarIdentifiers?.isEmpty == true {
-            return CalendarMenuSnapshot(
-                sections: [
-                    CalendarMenuSection(
-                        title: "",
-                        rows: [
-                            CalendarMenuRow(title: "No calendars selected", isEnabled: false, color: nil, action: nil)
-                        ]
-                    )
-                ],
-                footerRows: standardFooterRows(globalShortcut: globalShortcut)
-            )
-        }
-
-        let visibleEvents = CalendarEventVisibility.upcomingEvents(
-            from: events,
+        let visibleItems = AgendaItemVisibility.visibleItems(
+            events: events,
+            reminders: reminders,
             includeAllDayEvents: showAllDayEvents,
+            includeReminders: showReminders,
             selectedCalendarIdentifiers: selectedCalendarIdentifiers,
-            now: now
+            now: now,
+            calendar: calendar
         )
 
-        guard !visibleEvents.isEmpty else {
+        if visibleItems.isEmpty {
+            let emptyTitle: String
+            if selectedCalendarIdentifiers?.isEmpty == true {
+                emptyTitle = "No calendars selected"
+            } else if showReminders {
+                emptyTitle = "No upcoming events or reminders"
+            } else {
+                emptyTitle = "No upcoming events"
+            }
+
             return CalendarMenuSnapshot(
                 sections: [
                     CalendarMenuSection(
                         title: "",
                         rows: [
-                            CalendarMenuRow(title: "No upcoming events", isEnabled: false, color: nil, action: nil)
+                            CalendarMenuRow(title: emptyTitle, isEnabled: false, color: nil, action: nil)
                         ]
                     )
                 ],
@@ -308,16 +324,17 @@ struct MenuBuilder {
             )
         }
 
-        let prioritizedIndex = visibleEvents.firstIndex {
-            shouldPrioritize($0, displayMode: displayMode, now: now)
+        let prioritizedIndex = visibleItems.firstIndex {
+            AgendaItemVisibility.shouldPrioritize($0, displayMode: displayMode, now: now)
         }
-        let prioritizedEvent = prioritizedIndex.map { visibleEvents[$0] }
-        var remainingEvents = visibleEvents
+        let prioritizedItem = prioritizedIndex.map { visibleItems[$0] }
+        var remainingItems = visibleItems
         if let prioritizedIndex {
-            remainingEvents.remove(at: prioritizedIndex)
+            remainingItems.remove(at: prioritizedIndex)
         }
-        let grouped = Dictionary(grouping: remainingEvents) { event in
-            calendar.startOfDay(for: event.startDate)
+
+        let grouped = Dictionary(grouping: remainingItems) { item in
+            calendar.startOfDay(for: item.date)
         }
 
         var sections = grouped.keys.sorted().map { day in
@@ -328,21 +345,17 @@ struct MenuBuilder {
                     calendar: calendar,
                     locale: locale
                 ),
-                rows: grouped[day, default: []].flatMap { event in
-                    rows(for: event, showEventColors: showEventColors, calendar: calendar)
+                rows: grouped[day, default: []].flatMap { item in
+                    rows(for: item, showEventColors: showEventColors, calendar: calendar)
                 }
             )
         }
 
-        if let prioritizedEvent {
+        if let prioritizedItem {
             sections.insert(
                 CalendarMenuSection(
-                    title: upcomingSectionTitle(for: prioritizedEvent, now: now),
-                    rows: rows(
-                        for: prioritizedEvent,
-                        showEventColors: showEventColors,
-                        calendar: calendar
-                    )
+                    title: upcomingSectionTitle(for: prioritizedItem, now: now, calendar: calendar),
+                    rows: rows(for: prioritizedItem, showEventColors: showEventColors, calendar: calendar)
                 ),
                 at: 0
             )
@@ -405,12 +418,55 @@ struct MenuBuilder {
         return [meetingEventRow]
     }
 
-    private func upcomingSectionTitle(for event: CalendarEvent, now: Date) -> String {
-        if event.startDate <= now && event.endDate >= now {
-            return "Ending in \(menuDuration(event.endDate.timeIntervalSince(now)))"
-        }
+    private func row(for reminder: CalendarReminder, calendar: Calendar) -> CalendarMenuRow {
+        let rowTitle = rowTitle(for: reminder, calendar: calendar)
+        let fullRowTitle = fullRowTitle(for: reminder, calendar: calendar)
 
-        return "Upcoming in \(menuDuration(event.startDate.timeIntervalSince(now)))"
+        return CalendarMenuRow(
+            title: rowTitle,
+            toolTip: rowTitle == fullRowTitle ? nil : fullRowTitle,
+            isEnabled: true,
+            color: nil,
+            systemSymbolName: "circle",
+            action: .openReminders
+        )
+    }
+
+    private func rows(
+        for item: AgendaItem,
+        showEventColors: Bool,
+        calendar: Calendar
+    ) -> [CalendarMenuRow] {
+        switch item {
+        case let .event(event):
+            rows(for: event, showEventColors: showEventColors, calendar: calendar)
+        case let .reminder(reminder):
+            [row(for: reminder, calendar: calendar)]
+        }
+    }
+
+    private func upcomingSectionTitle(
+        for item: AgendaItem,
+        now: Date,
+        calendar: Calendar
+    ) -> String {
+        switch item {
+        case let .event(event):
+            if event.startDate <= now && event.endDate >= now {
+                return "Ending in \(menuDuration(event.endDate.timeIntervalSince(now)))"
+            }
+            return "Upcoming in \(menuDuration(event.startDate.timeIntervalSince(now)))"
+
+        case let .reminder(reminder):
+            if reminder.isAllDay, calendar.isDate(reminder.dueDate, inSameDayAs: now) {
+                return "Due today"
+            }
+            if reminder.dueDate <= now {
+                let elapsed = now.timeIntervalSince(reminder.dueDate)
+                return elapsed < 60 ? "Due now" : "Overdue by \(menuDuration(elapsed))"
+            }
+            return "Due in \(menuDuration(reminder.dueDate.timeIntervalSince(now)))"
+        }
     }
 
     private func menuDuration(_ timeInterval: TimeInterval) -> String {
@@ -425,25 +481,6 @@ struct MenuBuilder {
         let minutes = totalMinutes % 60
         if hours == 0 { return "\(minutes) min" }
         return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
-    }
-
-    private func shouldPrioritize(
-        _ event: CalendarEvent,
-        displayMode: MenuBarDisplayMode,
-        now: Date
-    ) -> Bool {
-        guard displayMode != .never else {
-            return false
-        }
-
-        if event.startDate <= now && event.endDate >= now {
-            return true
-        }
-
-        guard let leadTime = displayMode.leadTime else {
-            return true
-        }
-        return event.startDate <= now.addingTimeInterval(leadTime)
     }
 
     private func rowTitle(for event: CalendarEvent, calendar: Calendar) -> String {
@@ -467,6 +504,27 @@ struct MenuBuilder {
         return "\(DateFormatting.eventTime(event.startDate, locale: locale, calendar: calendar)) · \(title)"
     }
 
+    private func rowTitle(for reminder: CalendarReminder, calendar: Calendar) -> String {
+        let title = EventTitleTruncator.truncate(reminder.title, maxLength: maxEventTitleLength)
+        return fullRowTitle(for: reminder, title: title, calendar: calendar)
+    }
+
+    private func fullRowTitle(for reminder: CalendarReminder, calendar: Calendar) -> String {
+        fullRowTitle(for: reminder, title: reminder.title, calendar: calendar)
+    }
+
+    private func fullRowTitle(
+        for reminder: CalendarReminder,
+        title: String,
+        calendar: Calendar
+    ) -> String {
+        if reminder.isAllDay {
+            return "All-day · \(title)"
+        }
+
+        return "\(DateFormatting.eventTime(reminder.dueDate, locale: locale, calendar: calendar)) · \(title)"
+    }
+
     private func menuItem(for row: CalendarMenuRow, target: AnyObject) -> NSMenuItem {
         if row.isSeparator {
             return .separator()
@@ -482,7 +540,12 @@ struct MenuBuilder {
         item.representedObject = row.action
         item.toolTip = row.toolTip
 
-        if let color = row.color {
+        if let systemSymbolName = row.systemSymbolName {
+            item.image = NSImage(
+                systemSymbolName: systemSymbolName,
+                accessibilityDescription: "Reminder"
+            )
+        } else if let color = row.color {
             item.image = MenuIconRenderer.colorBar(color: color, size: NSSize(width: 4, height: 14))
         }
         if !row.submenuRows.isEmpty {
@@ -504,6 +567,8 @@ struct MenuBuilder {
             return #selector(MenuBarController.openCalendarPrivacySettings)
         case .openCalendar:
             return #selector(MenuBarController.openCalendarApp)
+        case .openReminders:
+            return #selector(MenuBarController.openRemindersApp)
         case .openEvent:
             return #selector(MenuBarController.openCalendarEvent(_:))
         case .joinMeeting:

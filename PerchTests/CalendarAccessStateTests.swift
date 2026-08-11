@@ -29,4 +29,16 @@ final class CalendarAccessStateTests: XCTestCase {
             XCTAssertFalse(accessState.statusDetail.isEmpty)
         }
     }
+
+    func testReminderAccessStatesExposeIndependentSettingsActions() {
+        XCTAssertEqual(ReminderAccessState.notDetermined.settingsAction, .requestAccess)
+        XCTAssertFalse(ReminderAccessState.notDetermined.isSufficientForReadingReminders)
+        XCTAssertNil(ReminderAccessState.fullAccess.settingsAction)
+        XCTAssertTrue(ReminderAccessState.fullAccess.isSufficientForReadingReminders)
+
+        for accessState in [ReminderAccessState.denied, .restricted, .unknown] {
+            XCTAssertEqual(accessState.settingsAction, .openPrivacySettings)
+            XCTAssertFalse(accessState.isSufficientForReadingReminders)
+        }
+    }
 }

@@ -26,6 +26,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(model.lookAheadDays, 14)
         XCTAssertFalse(model.showEventColors)
         XCTAssertFalse(model.showAllDayEvents)
+        XCTAssertFalse(model.showReminders)
         XCTAssertEqual(model.globalShortcut, shortcut)
         XCTAssertEqual(model.accessState, .writeOnly)
         XCTAssertEqual(model.accessActionTitle, "Privacy Settings...")
@@ -349,6 +350,40 @@ final class SettingsViewModelTests: XCTestCase {
         model.showAllDayEvents = false
 
         XCTAssertFalse(settingsStore.settings.showAllDayEvents)
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    func testEnablingRemindersPersistsRequestsAccessAndNotifies() async {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let calendarProvider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: calendarProvider)
+        let reminderProvider = FakeReminderPermissionProvider(
+            state: .notDetermined,
+            requestResult: .fullAccess
+        )
+        let reminderPermissionController = ReminderPermissionController(
+            permissionProvider: reminderProvider
+        )
+        var accessCompletionCount = 0
+        var changeCount = 0
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController,
+            reminderPermissionController: reminderPermissionController,
+            onAccessRequestCompleted: { accessCompletionCount += 1 }
+        ) {
+            changeCount += 1
+        }
+
+        model.showReminders = true
+        await waitForAsyncModelUpdate {
+            model.reminderAccessState == .fullAccess && !model.isRequestingReminderAccess
+        }
+
+        XCTAssertTrue(settingsStore.settings.showReminders)
+        XCTAssertEqual(model.reminderAccessState, .fullAccess)
+        XCTAssertEqual(reminderProvider.requestCount, 1)
+        XCTAssertEqual(accessCompletionCount, 1)
         XCTAssertEqual(changeCount, 1)
     }
 

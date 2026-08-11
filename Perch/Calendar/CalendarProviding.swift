@@ -46,6 +46,15 @@ struct CalendarInfo: Identifiable, Equatable {
     }
 }
 
+struct CalendarReminder: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let dueDate: Date
+    let isAllDay: Bool
+    let listTitle: String
+    let listIdentifier: String
+}
+
 protocol CalendarPermissionProviding {
     func authorizationState() -> CalendarAccessState
     func requestFullAccess() async -> CalendarAccessState
@@ -60,10 +69,21 @@ protocol CalendarEventProviding {
     ) async throws -> [CalendarEvent]
 }
 
+protocol ReminderPermissionProviding {
+    func reminderAuthorizationState() -> ReminderAccessState
+    func requestFullReminderAccess() async -> ReminderAccessState
+}
+
+protocol ReminderEventProviding {
+    func reminders(from startDate: Date, to endDate: Date) async -> [CalendarReminder]
+}
+
 typealias CalendarProviding = CalendarPermissionProviding & CalendarEventProviding
+typealias ReminderProviding = ReminderPermissionProviding & ReminderEventProviding
+typealias AgendaProviding = CalendarProviding & ReminderProviding
 
 #if DEBUG
-final class DemoCalendarProvider: CalendarProviding {
+final class DemoCalendarProvider: AgendaProviding {
     private let calendars = [
         CalendarInfo(id: "demo-calendar", title: "Calendar", sourceTitle: "iCloud", color: .systemRed),
         CalendarInfo(id: "demo-home", title: "Home", sourceTitle: "iCloud", color: .systemTeal),
@@ -79,6 +99,8 @@ final class DemoCalendarProvider: CalendarProviding {
 
     func authorizationState() -> CalendarAccessState { .fullAccess }
     func requestFullAccess() async -> CalendarAccessState { .fullAccess }
+    func reminderAuthorizationState() -> ReminderAccessState { .fullAccess }
+    func requestFullReminderAccess() async -> ReminderAccessState { .fullAccess }
     func availableCalendars() async throws -> [CalendarInfo] { calendars }
 
     func events(
@@ -158,6 +180,24 @@ final class DemoCalendarProvider: CalendarProviding {
                 && event.startDate <= endDate
                 && (calendarIdentifiers?.contains(event.calendarIdentifier) ?? true)
         }
+    }
+
+    func reminders(from startDate: Date, to endDate: Date) async -> [CalendarReminder] {
+        let dueDate = Date().addingTimeInterval(2 * 60 * 60)
+        guard dueDate >= startDate, dueDate <= endDate else {
+            return []
+        }
+
+        return [
+            CalendarReminder(
+                id: "demo-reminder",
+                title: "Send project update",
+                dueDate: dueDate,
+                isAllDay: false,
+                listTitle: "Reminders",
+                listIdentifier: "demo-reminders"
+            )
+        ]
     }
 }
 #endif

@@ -14,6 +14,19 @@ enum CalendarAccessSettingsAction: Equatable {
     case openPrivacySettings
 }
 
+enum ReminderAccessState: Equatable {
+    case notDetermined
+    case fullAccess
+    case denied
+    case restricted
+    case unknown
+}
+
+enum ReminderAccessSettingsAction: Equatable {
+    case requestAccess
+    case openPrivacySettings
+}
+
 extension CalendarAccessState {
     var statusTitle: String {
         switch self {
@@ -60,6 +73,23 @@ extension CalendarAccessState {
         case .fullAccess:
             return nil
         case .writeOnly, .denied, .restricted, .unknown:
+            return .openPrivacySettings
+        }
+    }
+}
+
+extension ReminderAccessState {
+    var isSufficientForReadingReminders: Bool {
+        self == .fullAccess
+    }
+
+    var settingsAction: ReminderAccessSettingsAction? {
+        switch self {
+        case .notDetermined:
+            return .requestAccess
+        case .fullAccess:
+            return nil
+        case .denied, .restricted, .unknown:
             return .openPrivacySettings
         }
     }

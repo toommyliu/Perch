@@ -53,12 +53,75 @@ final class CalendarPermissionController: ObservableObject {
     }
 }
 
+@MainActor
+final class ReminderPermissionController: ObservableObject {
+    static let privacySettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders")!
+
+    @Published private(set) var accessState: ReminderAccessState
+
+    private let permissionProvider: ReminderPermissionProviding
+    private let openURL: (URL) -> Void
+
+    init(
+        permissionProvider: ReminderPermissionProviding,
+        openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
+    ) {
+        self.permissionProvider = permissionProvider
+        self.openURL = openURL
+        self.accessState = permissionProvider.reminderAuthorizationState()
+    }
+
+    @discardableResult
+    func refreshStatus() -> ReminderAccessState {
+        let currentState = permissionProvider.reminderAuthorizationState()
+        updateAccessState(currentState)
+        return currentState
+    }
+
+    @discardableResult
+    func requestFullAccess() async -> ReminderAccessState {
+        let currentState = await permissionProvider.requestFullReminderAccess()
+        updateAccessState(currentState)
+        return currentState
+    }
+
+    func openPrivacySettings() {
+        openURL(Self.privacySettingsURL)
+    }
+
+    private func updateAccessState(_ currentState: ReminderAccessState) {
+        guard accessState != currentState else { return }
+
+        let previousState = accessState
+        accessState = currentState
+        PerchLog.calendar.notice(
+            """
+            Reminders access changed: \
+            from=\(previousState.logValue, privacy: .public) \
+            to=\(currentState.logValue, privacy: .public)
+            """
+        )
+    }
+}
+
 private extension CalendarAccessState {
     var logValue: String {
         switch self {
         case .notDetermined: "notDetermined"
         case .fullAccess: "fullAccess"
         case .writeOnly: "writeOnly"
+        case .denied: "denied"
+        case .restricted: "restricted"
+        case .unknown: "unknown"
+        }
+    }
+}
+
+private extension ReminderAccessState {
+    var logValue: String {
+        switch self {
+        case .notDetermined: "notDetermined"
+        case .fullAccess: "fullAccess"
         case .denied: "denied"
         case .restricted: "restricted"
         case .unknown: "unknown"

@@ -60,6 +60,53 @@ final class CalendarPermissionControllerTests: XCTestCase {
 }
 
 @MainActor
+final class ReminderPermissionControllerTests: XCTestCase {
+    func testRequestFullAccessUpdatesPublishedState() async {
+        let provider = FakeReminderPermissionProvider(state: .notDetermined, requestResult: .fullAccess)
+        let controller = ReminderPermissionController(permissionProvider: provider)
+
+        let state = await controller.requestFullAccess()
+
+        XCTAssertEqual(state, .fullAccess)
+        XCTAssertEqual(controller.accessState, .fullAccess)
+        XCTAssertEqual(provider.requestCount, 1)
+    }
+
+    func testOpenPrivacySettingsOpensExpectedURL() {
+        let provider = FakeReminderPermissionProvider(state: .denied)
+        var openedURLs: [URL] = []
+        let controller = ReminderPermissionController(permissionProvider: provider) { url in
+            openedURLs.append(url)
+        }
+
+        controller.openPrivacySettings()
+
+        XCTAssertEqual(openedURLs, [ReminderPermissionController.privacySettingsURL])
+    }
+}
+
+final class FakeReminderPermissionProvider: ReminderPermissionProviding {
+    var state: ReminderAccessState
+    var requestResult: ReminderAccessState
+    private(set) var requestCount = 0
+
+    init(state: ReminderAccessState, requestResult: ReminderAccessState? = nil) {
+        self.state = state
+        self.requestResult = requestResult ?? state
+    }
+
+    func reminderAuthorizationState() -> ReminderAccessState {
+        state
+    }
+
+    func requestFullReminderAccess() async -> ReminderAccessState {
+        requestCount += 1
+        state = requestResult
+        return requestResult
+    }
+}
+
+@MainActor
 final class CalendarRefreshCoalescerTests: XCTestCase {
     func testRequestsWhileRefreshIsRunningAreCoalescedIntoOneFollowUp() async {
         let firstRefreshStarted = expectation(description: "first refresh started")

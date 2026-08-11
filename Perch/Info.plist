@@ -28,5 +28,7 @@
 	<string>Perch needs full calendar access to show upcoming events in the menu bar.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Perch needs calendar access to show upcoming events in the menu bar.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Perch needs reminders access to show your scheduled reminders in the menu bar and tray menu.</string>
 </dict>
 </plist>

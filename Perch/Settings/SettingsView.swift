@@ -33,6 +33,14 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var showReminders: Bool {
+        didSet {
+            settingsStore.updateShowReminders(showReminders)
+            onChange()
+            requestReminderAccessIfNeeded()
+        }
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             guard !isApplyingLoginItemState else {
@@ -78,6 +86,8 @@ final class SettingsViewModel: ObservableObject {
 
     @Published private(set) var accessState: CalendarAccessState
     @Published private(set) var isRequestingAccess = false
+    @Published private(set) var reminderAccessState: ReminderAccessState
+    @Published private(set) var isRequestingReminderAccess = false
     @Published private(set) var globalShortcut: GlobalShortcut
     @Published private(set) var shortcutError: String?
     @Published private(set) var loginItemError: String?
@@ -88,6 +98,7 @@ final class SettingsViewModel: ObservableObject {
 
     private let settingsStore: SettingsStore
     private let permissionController: CalendarPermissionController
+    private let reminderPermissionController: ReminderPermissionController?
     private let calendarProvider: CalendarEventProviding?
     private let loginItemManager: LoginItemManaging
     private var isApplyingLoginItemState = false
@@ -99,12 +110,14 @@ final class SettingsViewModel: ObservableObject {
     private let onShortcutChangeRequested: (GlobalShortcut) -> HotKeyRegistrationResult
     private let onAccessRequestCompleted: () -> Void
     private var accessStateCancellable: AnyCancellable?
+    private var reminderAccessStateCancellable: AnyCancellable?
     private var calendarLoadTask: Task<Void, Never>?
 
     #if DEBUG
     init(
         settingsStore: SettingsStore,
         permissionController: CalendarPermissionController,
+        reminderPermissionController: ReminderPermissionController? = nil,
         calendarProvider: CalendarEventProviding? = nil,
         loginItemManager: LoginItemManaging = LoginItemManager(),
         dateIconDebugSettings: DateIconDebugSettings? = nil,
@@ -114,6 +127,7 @@ final class SettingsViewModel: ObservableObject {
     ) {
         self.settingsStore = settingsStore
         self.permissionController = permissionController
+        self.reminderPermissionController = reminderPermissionController
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
         self.dateIconDebugSettings = dateIconDebugSettings
@@ -125,21 +139,26 @@ final class SettingsViewModel: ObservableObject {
         self.lookAheadDays = settings.lookAheadDays
         self.showEventColors = settings.showEventColors
         self.showAllDayEvents = settings.showAllDayEvents
+        self.showReminders = settings.showReminders
         self.selectedCalendarIdentifiers = settings.selectedCalendarIdentifiers
         self.launchAtLogin = loginItemManager.isEnabled
         self.globalShortcut = settings.globalShortcut
         self.accessState = permissionController.accessState
+        self.reminderAccessState = reminderPermissionController?.accessState ?? .unknown
         self.onShortcutChangeRequested = onShortcutChangeRequested
         self.onAccessRequestCompleted = onAccessRequestCompleted
         self.onChange = onChange
 
         subscribeToAccessStateChanges()
+        subscribeToReminderAccessStateChanges()
         refreshAvailableCalendars()
+        requestReminderAccessIfNeeded()
     }
     #else
     init(
         settingsStore: SettingsStore,
         permissionController: CalendarPermissionController,
+        reminderPermissionController: ReminderPermissionController? = nil,
         calendarProvider: CalendarEventProviding? = nil,
         loginItemManager: LoginItemManaging = LoginItemManager(),
         onShortcutChangeRequested: @escaping (GlobalShortcut) -> HotKeyRegistrationResult = { _ in .success },
@@ -148,6 +167,7 @@ final class SettingsViewModel: ObservableObject {
     ) {
         self.settingsStore = settingsStore
         self.permissionController = permissionController
+        self.reminderPermissionController = reminderPermissionController
         self.calendarProvider = calendarProvider
         self.loginItemManager = loginItemManager
         let settings = settingsStore.settings
@@ -155,16 +175,20 @@ final class SettingsViewModel: ObservableObject {
         self.lookAheadDays = settings.lookAheadDays
         self.showEventColors = settings.showEventColors
         self.showAllDayEvents = settings.showAllDayEvents
+        self.showReminders = settings.showReminders
         self.selectedCalendarIdentifiers = settings.selectedCalendarIdentifiers
         self.launchAtLogin = loginItemManager.isEnabled
         self.globalShortcut = settings.globalShortcut
         self.accessState = permissionController.accessState
+        self.reminderAccessState = reminderPermissionController?.accessState ?? .unknown
         self.onShortcutChangeRequested = onShortcutChangeRequested
         self.onAccessRequestCompleted = onAccessRequestCompleted
         self.onChange = onChange
 
         subscribeToAccessStateChanges()
+        subscribeToReminderAccessStateChanges()
         refreshAvailableCalendars()
+        requestReminderAccessIfNeeded()
     }
     #endif
 
@@ -175,6 +199,17 @@ final class SettingsViewModel: ObservableObject {
             .sink { [weak self] accessState in
                 self?.accessState = accessState
                 self?.refreshAvailableCalendars()
+            }
+    }
+
+    private func subscribeToReminderAccessStateChanges() {
+        guard let reminderPermissionController else { return }
+
+        reminderAccessStateCancellable = reminderPermissionController.$accessState
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] accessState in
+                self?.reminderAccessState = accessState
             }
     }
 
@@ -316,6 +351,51 @@ final class SettingsViewModel: ObservableObject {
 
     func openCalendarPrivacySettings() {
         permissionController.openPrivacySettings()
+    }
+
+    var reminderAccessActionTitle: String? {
+        switch reminderAccessState.settingsAction {
+        case .requestAccess:
+            return "Allow Access..."
+        case .openPrivacySettings:
+            return "Privacy Settings..."
+        case nil:
+            return nil
+        }
+    }
+
+    func performReminderAccessAction() {
+        switch reminderAccessState.settingsAction {
+        case .requestAccess:
+            requestReminderAccess()
+        case .openPrivacySettings:
+            reminderPermissionController?.openPrivacySettings()
+        case nil:
+            break
+        }
+    }
+
+    func requestReminderAccess() {
+        guard !isRequestingReminderAccess,
+              let reminderPermissionController
+        else {
+            return
+        }
+
+        isRequestingReminderAccess = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            _ = await reminderPermissionController.requestFullAccess()
+            isRequestingReminderAccess = false
+            onAccessRequestCompleted()
+        }
+    }
+
+    private func requestReminderAccessIfNeeded() {
+        guard showReminders, reminderAccessState == .notDetermined else { return }
+        requestReminderAccess()
     }
 
     private func applyLaunchAtLoginChange() {
@@ -593,7 +673,7 @@ struct SettingsView: View {
 
     private var eventSettings: some View {
         SettingsSection(
-            title: "Events",
+            title: "Agenda",
             subtitle: "Choose what appears in the tray menu and menu bar."
         ) {
             if model.accessState.isSufficientForReadingEvents {
@@ -644,6 +724,22 @@ struct SettingsView: View {
             SettingsRowDivider()
 
             SettingsRow(
+                title: "Include scheduled reminders",
+                detail: nil
+            ) {
+                Toggle("Scheduled reminders", isOn: $model.showReminders)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            if model.showReminders && !model.reminderAccessState.isSufficientForReadingReminders {
+                SettingsRowDivider()
+                reminderAccessRow
+            }
+
+            SettingsRowDivider()
+
+            SettingsRow(
                 title: "Use calendar colors",
                 detail: nil
             ) {
@@ -680,6 +776,34 @@ struct SettingsView: View {
             }
         }
         .disabled(model.isRequestingAccess)
+    }
+
+    private var reminderAccessRow: some View {
+        SettingsRow(
+            title: "Reminders access",
+            detail: nil
+        ) {
+            if model.isRequestingReminderAccess {
+                ProgressView()
+                    .controlSize(.small)
+            } else if let actionTitle = model.reminderAccessActionTitle {
+                HStack(spacing: 10) {
+                    Text("Required")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    Button(actionTitle) {
+                        model.performReminderAccessAction()
+                    }
+                    .controlSize(.small)
+                }
+            } else {
+                Text("Unavailable")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(model.isRequestingReminderAccess)
     }
 
     private var calendarSelectionRow: some View {
