@@ -9,6 +9,7 @@ DEBUG_BUNDLE_ID="com.app.perch.debug"
 ARTIFACT_BUILD_BUNDLE_ID="com.app.perch.build"
 ARTIFACT_DERIVED_DATA_PATH="build/ArtifactDerivedData"
 ARTIFACTS_DIR="build/artifacts"
+ARTIFACT_SIGNING_IDENTITY="${PERCH_SIGNING_IDENTITY:-Local Code Signing}"
 
 usage() {
   cat <<'USAGE'
@@ -25,6 +26,9 @@ Commands:
 Outputs:
   Debug/Release:  Xcode's active DerivedData product location
   Artifacts:      build/artifacts/Perch-<version>-<build>-<timestamp>.zip
+
+Environment:
+  PERCH_SIGNING_IDENTITY  Artifact signing identity (default: Local Code Signing)
 USAGE
 }
 
@@ -37,6 +41,21 @@ require_xcodebuild() {
     echo "error: xcodebuild is required. Install Xcode or Xcode Command Line Tools." >&2
     exit 1
   fi
+}
+
+require_artifact_signing_identity() {
+  if security find-identity -v -p codesigning 2>/dev/null \
+    | grep -Fq -- "$ARTIFACT_SIGNING_IDENTITY"
+  then
+    return
+  fi
+
+  cat >&2 <<ERROR
+error: code signing identity '$ARTIFACT_SIGNING_IDENTITY' was not found.
+Create a self-signed Code Signing certificate with that name in Keychain Access,
+or set PERCH_SIGNING_IDENTITY to another identity available in your keychain.
+ERROR
+  exit 1
 }
 
 build_app() {
@@ -237,11 +256,12 @@ prepare_production_artifact_app() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCTION_BUNDLE_ID" "$app/Contents/Info.plist"
   codesign \
     --force \
-    --sign - \
+    --sign "$ARTIFACT_SIGNING_IDENTITY" \
     --options runtime \
     --entitlements "Perch/Perch.entitlements" \
     --timestamp=none \
     "$app"
+  codesign --verify --deep --strict "$app"
 }
 
 main() {
@@ -275,6 +295,7 @@ main() {
       ;;
     artifact)
       require_xcodebuild
+      require_artifact_signing_identity
       clean_build_artifact_app Release "$ARTIFACT_BUILD_BUNDLE_ID"
       create_artifact "$(artifact_app_path)"
       ;;
