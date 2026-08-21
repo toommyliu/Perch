@@ -407,16 +407,14 @@ final class MenuBarController: NSObject {
         button.title = "\(leadingText)\(relativeText)"
         button.toolTip = title
 
-        guard let measurementCell = button.cell?.copy() as? NSButtonCell else { return }
-        let statusItemChromeWidth = max(0, button.frame.width - button.fittingSize.width)
+        guard let widthMeasurer = MenuBarStatusItemWidthMeasurer(button: button) else { return }
         button.title = MenuBarLabelWidthLimiter.fit(
             title: title,
             relativeText: relativeText,
             leadingText: leadingText,
             maximumWidth: Self.maximumAgendaStatusItemWidth
         ) { candidate in
-            measurementCell.title = candidate
-            return measurementCell.cellSize.width + statusItemChromeWidth
+            widthMeasurer.width(for: candidate)
         }
     }
 
