@@ -32,6 +32,7 @@
 		10000000000000000000001A /* MeetingLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* MeetingLink.swift */; };
 		10000000000000000000001B /* DateIconDebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011B /* DateIconDebugSettings.swift */; };
 		10000000000000000000001C /* EventTitleTruncator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011C /* EventTitleTruncator.swift */; };
+		10000000000000000000001F /* MenuBarLabelWidthLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */; };
 		10000000000000000000001D /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011D /* LoginItemManager.swift */; };
 		10000000000000000000001E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011E /* AppIcon.icon */; };
 		100000000000000000000011 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* EventKit.framework */; };
@@ -89,6 +90,7 @@
 		100000000000000000000119 /* MeetingLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingLink.swift; sourceTree = "<group>"; };
 		10000000000000000000011B /* DateIconDebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateIconDebugSettings.swift; sourceTree = "<group>"; };
 		10000000000000000000011C /* EventTitleTruncator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTitleTruncator.swift; sourceTree = "<group>"; };
+		10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelWidthLimiter.swift; sourceTree = "<group>"; };
 		10000000000000000000011D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
 		10000000000000000000011E /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		100000000000000000000121 /* MenuBarLabelFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelFormatterTests.swift; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 				10000000000000000000010B /* MenuIconRenderer.swift */,
 				10000000000000000000011B /* DateIconDebugSettings.swift */,
 				10000000000000000000011C /* EventTitleTruncator.swift */,
+				10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -385,6 +388,7 @@
 				10000000000000000000001A /* MeetingLink.swift in Sources */,
 				10000000000000000000001B /* DateIconDebugSettings.swift in Sources */,
 				10000000000000000000001C /* EventTitleTruncator.swift in Sources */,
+				10000000000000000000001F /* MenuBarLabelWidthLimiter.swift in Sources */,
 				10000000000000000000001D /* LoginItemManager.swift in Sources */,
 				100000000000000000000014 /* GlobalHotKeyController.swift in Sources */,
 				100000000000000000000016 /* CalendarPermissionController.swift in Sources */,

@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class MenuBarController: NSObject {
     private static let dateIconStatusItemLength: CGFloat = 20
+    private static let maximumAgendaStatusItemWidth: CGFloat = 200
 
     private let statusItem: NSStatusItem
     private let calendarProvider: CalendarEventProviding
@@ -175,8 +176,7 @@ final class MenuBarController: NSObject {
             return
         }
         button.imagePosition = .imageLeading
-        button.toolTip = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            ?? "Perch"
+        button.toolTip = defaultStatusItemToolTip
         button.title = ""
         button.target = self
         button.action = #selector(statusItemPressed(_:))
@@ -367,24 +367,61 @@ final class MenuBarController: NSObject {
             button.imagePosition = .imageOnly
             button.title = ""
             button.image = MenuIconRenderer.dateIcon(day: day, options: options)
+            button.toolTip = defaultStatusItemToolTip
         #else
         case let .dateIcon(day):
             statusItem.length = Self.dateIconStatusItemLength
             button.imagePosition = .imageOnly
             button.title = ""
             button.image = MenuIconRenderer.dateIcon(day: day)
+            button.toolTip = defaultStatusItemToolTip
         #endif
         case let .event(title, relativeText, color):
-            statusItem.length = NSStatusItem.variableLength
-            button.imagePosition = .imageLeading
-            button.image = color.map { MenuIconRenderer.colorBar(color: $0) }
-            button.title = "\(color == nil ? "" : " ")\(title) · \(relativeText)"
+            setAgendaStatusItem(
+                title: title,
+                relativeText: relativeText,
+                image: color.map { MenuIconRenderer.colorBar(color: $0) },
+                button: button
+            )
         case let .reminder(title, relativeText):
-            statusItem.length = NSStatusItem.variableLength
-            button.imagePosition = .imageLeading
-            button.image = NSImage(systemSymbolName: "circle", accessibilityDescription: "Reminder")
-            button.title = " \(title) · \(relativeText)"
+            setAgendaStatusItem(
+                title: title,
+                relativeText: relativeText,
+                image: NSImage(systemSymbolName: "circle", accessibilityDescription: "Reminder"),
+                button: button
+            )
         }
+    }
+
+    private func setAgendaStatusItem(
+        title: String,
+        relativeText: String,
+        image: NSImage?,
+        button: NSStatusBarButton
+    ) {
+        statusItem.length = NSStatusItem.variableLength
+        button.imagePosition = .imageLeading
+        button.image = image
+
+        let leadingText = image == nil ? "" : " "
+        button.title = "\(leadingText)\(relativeText)"
+        button.toolTip = title
+
+        guard let measurementCell = button.cell?.copy() as? NSButtonCell else { return }
+        let statusItemChromeWidth = max(0, button.frame.width - button.fittingSize.width)
+        button.title = MenuBarLabelWidthLimiter.fit(
+            title: title,
+            relativeText: relativeText,
+            leadingText: leadingText,
+            maximumWidth: Self.maximumAgendaStatusItemWidth
+        ) { candidate in
+            measurementCell.title = candidate
+            return measurementCell.cellSize.width + statusItemChromeWidth
+        }
+    }
+
+    private var defaultStatusItemToolTip: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Perch"
     }
 
     @objc func closeTrayMenuFromMenuItem() {
