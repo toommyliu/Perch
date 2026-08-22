@@ -328,7 +328,7 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .reminder(title: "Reset", relativeText: "1h 0m overdue"))
     }
 
-    func testLongTitleTruncatesWhilePreservingRelativeTime() {
+    func testLongTitleRemainsAvailableForWidthAwarePresentation() {
         let now = date(hour: 9, minute: 0)
         let event = makeEvent(
             title: "Extremely Long Calendar Event Title That Should Be Truncated",
@@ -345,7 +345,11 @@ final class MenuBarLabelFormatterTests: XCTestCase {
 
         XCTAssertEqual(
             content,
-            .event(title: "Extremely Long Calendar E...", relativeText: "in 1h 0m", color: .systemBlue)
+            .event(
+                title: "Extremely Long Calendar Event Title That Should Be Truncated",
+                relativeText: "in 1h 0m",
+                color: .systemBlue
+            )
         )
     }
 
@@ -389,6 +393,70 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         components.minute = minute
         components.second = second
         return components.date!
+    }
+}
+
+final class MenuBarLabelWidthLimiterTests: XCTestCase {
+    func testFullLabelRemainsUnchangedWhenItFits() {
+        let label = fit(title: "Roadmap", relativeText: "35m left", maximumWidth: 19)
+
+        XCTAssertEqual(label, "Roadmap · 35m left")
+    }
+
+    func testMiddleEllipsisPreservesStartEndAndRelativeTime() {
+        let label = fit(title: "ABCDEFGHIJKLMNO", relativeText: "5m", maximumWidth: 16)
+
+        XCTAssertEqual(label, "ABCDEFG…MNO · 5m")
+    }
+
+    func testNarrowLabelUsesTailEllipsis() {
+        let label = fit(title: "ABCDEFGHIJKLMNO", relativeText: "5m", maximumWidth: 12)
+
+        XCTAssertEqual(label, "ABCDEF… · 5m")
+    }
+
+    func testRelativeTimeRemainsWhenNoTitleFragmentFits() {
+        let label = fit(title: "ABCDEFGHIJKLMNO", relativeText: "5m", maximumWidth: 2)
+
+        XCTAssertEqual(label, "5m")
+    }
+
+    func testWhitespaceIsNormalizedForSingleLinePresentation() {
+        let label = fit(title: "Roadmap\n  review", relativeText: "5m", maximumWidth: 40)
+
+        XCTAssertEqual(label, "Roadmap review · 5m")
+    }
+
+    func testMeasurementControlsHowManyCharactersAreRetained() {
+        let label = MenuBarLabelWidthLimiter.fit(
+            title: "WWWWiiiiABCDEFGHIJ",
+            relativeText: "5m",
+            leadingText: "",
+            maximumWidth: 20
+        ) { label in
+            label.reduce(CGFloat.zero) { width, character in
+                width + (character == "W" ? 3 : 1)
+            }
+        }
+
+        XCTAssertLessThanOrEqual(measuredWidth(label), 20)
+        XCTAssertTrue(label.hasPrefix("WW"))
+        XCTAssertTrue(label.hasSuffix(" · 5m"))
+    }
+
+    private func fit(title: String, relativeText: String, maximumWidth: CGFloat) -> String {
+        MenuBarLabelWidthLimiter.fit(
+            title: title,
+            relativeText: relativeText,
+            leadingText: "",
+            maximumWidth: maximumWidth
+        ) { CGFloat($0.count) }
+    }
+
+    private func measuredWidth(_ label: String) -> CGFloat {
+        label.reduce(CGFloat.zero) { width, character in
+            width + (character == "W" ? 3 : 1)
+        }
     }
 }
 

@@ -33,7 +33,6 @@ enum MenuBarLabelContent: Equatable {
 }
 
 struct MenuBarLabelFormatter {
-    private let maxTitleLength = 28
     private let locale: Locale
 
     init(locale: Locale = .autoupdatingCurrent) {
@@ -70,7 +69,7 @@ struct MenuBarLabelFormatter {
         switch nextItem {
         case let .event(event):
             return .event(
-                title: EventTitleTruncator.truncate(event.title, maxLength: maxTitleLength),
+                title: event.title,
                 relativeText: relativeText(
                     for: event,
                     mode: settings.displayMode,
@@ -81,7 +80,7 @@ struct MenuBarLabelFormatter {
             )
         case let .reminder(reminder):
             return .reminder(
-                title: EventTitleTruncator.truncate(reminder.title, maxLength: maxTitleLength),
+                title: reminder.title,
                 relativeText: relativeText(for: reminder, now: now, calendar: calendar)
             )
         }

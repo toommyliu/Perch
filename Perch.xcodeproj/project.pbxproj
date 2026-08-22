@@ -32,6 +32,8 @@
 		10000000000000000000001A /* MeetingLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000119 /* MeetingLink.swift */; };
 		10000000000000000000001B /* DateIconDebugSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011B /* DateIconDebugSettings.swift */; };
 		10000000000000000000001C /* EventTitleTruncator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011C /* EventTitleTruncator.swift */; };
+		10000000000000000000001F /* MenuBarLabelWidthLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */; };
+		100000000000000000000020 /* MenuBarStatusItemWidthMeasurer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000120 /* MenuBarStatusItemWidthMeasurer.swift */; };
 		10000000000000000000001D /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011D /* LoginItemManager.swift */; };
 		10000000000000000000001E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000011E /* AppIcon.icon */; };
 		100000000000000000000011 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000201 /* EventKit.framework */; };
@@ -49,6 +51,7 @@
 		10000000000000000000002A /* MeetingLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012A /* MeetingLinkTests.swift */; };
 		10000000000000000000002B /* MenuIconRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012B /* MenuIconRendererTests.swift */; };
 		10000000000000000000002C /* CalendarRefreshScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012C /* CalendarRefreshScheduleTests.swift */; };
+		10000000000000000000002D /* MenuBarStatusItemWidthMeasurerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +92,8 @@
 		100000000000000000000119 /* MeetingLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingLink.swift; sourceTree = "<group>"; };
 		10000000000000000000011B /* DateIconDebugSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateIconDebugSettings.swift; sourceTree = "<group>"; };
 		10000000000000000000011C /* EventTitleTruncator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventTitleTruncator.swift; sourceTree = "<group>"; };
+		10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelWidthLimiter.swift; sourceTree = "<group>"; };
+		100000000000000000000120 /* MenuBarStatusItemWidthMeasurer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemWidthMeasurer.swift; sourceTree = "<group>"; };
 		10000000000000000000011D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
 		10000000000000000000011E /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		100000000000000000000121 /* MenuBarLabelFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarLabelFormatterTests.swift; sourceTree = "<group>"; };
@@ -103,6 +108,7 @@
 		10000000000000000000012A /* MeetingLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingLinkTests.swift; sourceTree = "<group>"; };
 		10000000000000000000012B /* MenuIconRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuIconRendererTests.swift; sourceTree = "<group>"; };
 		10000000000000000000012C /* CalendarRefreshScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarRefreshScheduleTests.swift; sourceTree = "<group>"; };
+		10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemWidthMeasurerTests.swift; sourceTree = "<group>"; };
 		100000000000000000000201 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
 		100000000000000000000202 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		100000000000000000000203 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
@@ -173,6 +179,7 @@
 				100000000000000000000129 /* CalendarEventOpenURLBuilderTests.swift */,
 				10000000000000000000012A /* MeetingLinkTests.swift */,
 				10000000000000000000012C /* CalendarRefreshScheduleTests.swift */,
+				10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */,
 			);
 			path = PerchTests;
 			sourceTree = "<group>";
@@ -229,6 +236,8 @@
 				10000000000000000000010B /* MenuIconRenderer.swift */,
 				10000000000000000000011B /* DateIconDebugSettings.swift */,
 				10000000000000000000011C /* EventTitleTruncator.swift */,
+				10000000000000000000011F /* MenuBarLabelWidthLimiter.swift */,
+				100000000000000000000120 /* MenuBarStatusItemWidthMeasurer.swift */,
 			);
 			path = MenuBar;
 			sourceTree = "<group>";
@@ -385,6 +394,8 @@
 				10000000000000000000001A /* MeetingLink.swift in Sources */,
 				10000000000000000000001B /* DateIconDebugSettings.swift in Sources */,
 				10000000000000000000001C /* EventTitleTruncator.swift in Sources */,
+				10000000000000000000001F /* MenuBarLabelWidthLimiter.swift in Sources */,
+				100000000000000000000020 /* MenuBarStatusItemWidthMeasurer.swift in Sources */,
 				10000000000000000000001D /* LoginItemManager.swift in Sources */,
 				100000000000000000000014 /* GlobalHotKeyController.swift in Sources */,
 				100000000000000000000016 /* CalendarPermissionController.swift in Sources */,
@@ -407,6 +418,7 @@
 				10000000000000000000002A /* MeetingLinkTests.swift in Sources */,
 				10000000000000000000002B /* MenuIconRendererTests.swift in Sources */,
 				10000000000000000000002C /* CalendarRefreshScheduleTests.swift in Sources */,
+				10000000000000000000002D /* MenuBarStatusItemWidthMeasurerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
