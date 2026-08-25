@@ -17,6 +17,7 @@ struct UpcomingMeetingNotificationSchedule {
     static let defaultLeadTime: TimeInterval = 5 * 60
     static let defaultPostStartDisplayDuration: TimeInterval = 5 * 60
     static let calendarFetchLookback = defaultPostStartDisplayDuration
+    static let calendarFetchLookahead = defaultLeadTime
 
     let leadTime: TimeInterval
     let postStartDisplayDuration: TimeInterval
@@ -140,7 +141,9 @@ struct UpcomingMeetingNotificationState {
     private(set) var presentedOccurrence: MeetingNotificationOccurrence?
     private(set) var dismissedOccurrences: Set<MeetingNotificationOccurrence> = []
     private(set) var supersededOccurrences: Set<MeetingNotificationOccurrence> = []
-    private var presentedAt: Date?
+    // Retaining activations through brief provider omissions prevents a restored event
+    // from looking like a newly opened reminder window.
+    private var activatedOccurrences: Set<MeetingNotificationOccurrence> = []
 
     var excludedOccurrences: Set<MeetingNotificationOccurrence> {
         dismissedOccurrences.union(supersededOccurrences)
@@ -157,6 +160,7 @@ struct UpcomingMeetingNotificationState {
 
         guard isEnabled else {
             resetPresentation()
+            activatedOccurrences.removeAll()
             return nil
         }
 
@@ -166,16 +170,17 @@ struct UpcomingMeetingNotificationState {
             excluding: excludedOccurrences,
             now: now
         )
+        let activeOccurrences = Set(activeEvents.map(MeetingNotificationOccurrence.init))
+        defer { activatedOccurrences.formUnion(activeOccurrences) }
 
         if let presentedOccurrence,
-           let presentedAt,
            let currentEvent = activeEvents.first(where: {
                MeetingNotificationOccurrence(event: $0) == presentedOccurrence
            })
         {
             let newlyActivatedEvents = activeEvents.filter { event in
                 MeetingNotificationOccurrence(event: event) != presentedOccurrence
-                    && schedule.notificationDate(for: event) > presentedAt
+                    && !activatedOccurrences.contains(MeetingNotificationOccurrence(event: event))
             }
             let newlyActivatedReplacement = schedule.preferredEvent(
                 from: newlyActivatedEvents,
@@ -190,7 +195,7 @@ struct UpcomingMeetingNotificationState {
 
             if let replacement = newlyActivatedReplacement ?? upcomingReplacement {
                 supersededOccurrences.insert(presentedOccurrence)
-                setPresented(replacement, at: now)
+                setPresented(replacement)
                 return replacement
             }
 
@@ -202,7 +207,7 @@ struct UpcomingMeetingNotificationState {
             return nil
         }
 
-        setPresented(event, at: now)
+        setPresented(event)
         return event
     }
 
@@ -216,12 +221,10 @@ struct UpcomingMeetingNotificationState {
 
     mutating func resetPresentation() {
         presentedOccurrence = nil
-        presentedAt = nil
     }
 
-    private mutating func setPresented(_ event: CalendarEvent, at date: Date) {
+    private mutating func setPresented(_ event: CalendarEvent) {
         presentedOccurrence = MeetingNotificationOccurrence(event: event)
-        presentedAt = date
     }
 
     private mutating func prune(
@@ -232,6 +235,9 @@ struct UpcomingMeetingNotificationState {
             schedule.shouldRetain($0, now: now)
         })
         supersededOccurrences = Set(supersededOccurrences.filter {
+            schedule.shouldRetain($0, now: now)
+        })
+        activatedOccurrences = Set(activatedOccurrences.filter {
             schedule.shouldRetain($0, now: now)
         })
     }

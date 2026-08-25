@@ -64,6 +64,39 @@ final class MeetingLinkTests: XCTestCase {
         XCTAssertEqual(launchURLBuilder.launchURL(for: url), url)
     }
 
+    @MainActor
+    func testLauncherFallsBackToZoomWebURLWhenNativeLaunchFails() {
+        let webURL = URL(string: "https://school.zoom.us/j/1234567890?pwd=abc")!
+        var openedURLs: [URL] = []
+        let launcher = MeetingLauncher { url in
+            openedURLs.append(url)
+            return url == webURL
+        }
+
+        let didOpen = launcher.open(MeetingLink(url: webURL, provider: .zoom))
+
+        XCTAssertTrue(didOpen)
+        XCTAssertEqual(
+            openedURLs.map(\.scheme),
+            ["zoommtg", "https"]
+        )
+    }
+
+    @MainActor
+    func testLauncherReportsFailureWhenNeitherZoomURLCanOpen() {
+        let webURL = URL(string: "https://school.zoom.us/j/1234567890")!
+        var openedURLs: [URL] = []
+        let launcher = MeetingLauncher { url in
+            openedURLs.append(url)
+            return false
+        }
+
+        let didOpen = launcher.open(MeetingLink(url: webURL, provider: .zoom))
+
+        XCTAssertFalse(didOpen)
+        XCTAssertEqual(openedURLs.count, 2)
+    }
+
     func testExtractsGoogleMeetLink() {
         let link = extractor.meetingLink(from: [
             "Agenda: https://example.com/doc",

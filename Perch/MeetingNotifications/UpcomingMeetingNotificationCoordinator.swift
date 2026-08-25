@@ -8,7 +8,7 @@ final class UpcomingMeetingNotificationCoordinator {
     private let isEnabled: () -> Bool
     private let selectedCalendarIdentifiers: () -> Set<String>?
     private let canReadEvents: () -> Bool
-    private let openMeeting: @MainActor (MeetingLink) -> Void
+    private let openMeeting: @MainActor (MeetingLink) -> Bool
     private let windowController: UpcomingMeetingNotificationWindowController
 
     private var events: [CalendarEvent] = []
@@ -22,7 +22,7 @@ final class UpcomingMeetingNotificationCoordinator {
         isEnabled: @escaping () -> Bool,
         selectedCalendarIdentifiers: @escaping () -> Set<String>?,
         canReadEvents: @escaping () -> Bool,
-        openMeeting: (@MainActor (MeetingLink) -> Void)? = nil,
+        openMeeting: (@MainActor (MeetingLink) -> Bool)? = nil,
         windowController: UpcomingMeetingNotificationWindowController? = nil
     ) {
         self.schedule = schedule
@@ -49,6 +49,11 @@ final class UpcomingMeetingNotificationCoordinator {
     func update(events: [CalendarEvent]) {
         self.events = events
         reconcile()
+    }
+
+    func focusPresentedNotification() -> Bool {
+        guard state.presentedOccurrence != nil else { return false }
+        return windowController.focusForKeyboardInteraction()
     }
 
     func stop() {
@@ -117,8 +122,8 @@ final class UpcomingMeetingNotificationCoordinator {
             return
         }
 
+        guard openMeeting(meetingLink) else { return }
         state.dismissPresented()
-        openMeeting(meetingLink)
         reconcile()
     }
 

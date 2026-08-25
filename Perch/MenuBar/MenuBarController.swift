@@ -259,16 +259,21 @@ final class MenuBarController: NSObject {
         let lookAheadDays = settings.lookAheadDays
         lastFetchedLookAheadDays = lookAheadDays
         lastFetchedShowReminders = settings.showReminders
-        let endDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startOfDay)
+        let agendaEndDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startOfDay)
             ?? now.addingTimeInterval(TimeInterval(lookAheadDays * 24 * 60 * 60))
+        let eventFetchEndDate = agendaEndDate.addingTimeInterval(
+            UpcomingMeetingNotificationSchedule.calendarFetchLookahead
+        )
         allReminders = []
         do {
-            allEvents = try await calendarProvider.events(
+            let fetchedEvents = try await calendarProvider.events(
                 from: startDate,
-                to: endDate,
+                to: eventFetchEndDate,
                 calendarIdentifiers: nil
             )
-            onCalendarEventsUpdated?(allEvents)
+            // The extended query catches reminder windows crossing the agenda horizon.
+            allEvents = fetchedEvents.filter { $0.startDate <= agendaEndDate }
+            onCalendarEventsUpdated?(fetchedEvents)
         } catch {
             if !lastRefreshFailed {
                 let error = error as NSError
@@ -291,7 +296,7 @@ final class MenuBarController: NSObject {
            reminderAccessState.isSufficientForReadingReminders,
            let reminderProvider
         {
-            allReminders = await reminderProvider.reminders(from: startDate, to: endDate)
+            allReminders = await reminderProvider.reminders(from: startDate, to: agendaEndDate)
         }
 
         if lastRefreshFailed {

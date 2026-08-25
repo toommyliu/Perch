@@ -99,8 +99,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.settingsWindowController = settingsWindowController
         self.refreshCoordinator = refreshCoordinator
         self.meetingNotificationCoordinator = meetingNotificationCoordinator
-        let globalHotKeyController = GlobalHotKeyController(initialShortcut: settingsStore.settings.globalShortcut) { [weak menuBarController] in
-            menuBarController?.toggleTrayVisibility()
+        let globalHotKeyController = GlobalHotKeyController(
+            initialShortcut: settingsStore.settings.globalShortcut
+        ) { [weak menuBarController, weak meetingNotificationCoordinator] in
+            // A visible reminder gets the shortcut before the status menu so keyboard
+            // users can act on it without the panel stealing focus when it appears.
+            if meetingNotificationCoordinator?.focusPresentedNotification() != true {
+                menuBarController?.toggleTrayVisibility()
+            }
         }
         settingsWindowController.onShortcutChangeRequested = { [weak globalHotKeyController] shortcut in
             globalHotKeyController?.applyShortcut(shortcut) ?? .failure(OSStatus(-1))

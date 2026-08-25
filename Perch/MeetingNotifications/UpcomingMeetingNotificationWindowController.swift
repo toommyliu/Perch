@@ -14,6 +14,7 @@ final class UpcomingMeetingNotificationWindowController {
 
     private let panel: NSPanel
     private let hostingController: NSHostingController<AnyView>
+    private let keyboardFocus = MeetingNotificationKeyboardFocus()
     private var pendingEntrance: DispatchWorkItem?
     private var transitionGeneration = 0
     private var isPresenting = false
@@ -21,7 +22,7 @@ final class UpcomingMeetingNotificationWindowController {
 
     init() {
         hostingController = NSHostingController(rootView: AnyView(EmptyView()))
-        panel = NSPanel(
+        panel = MeetingNotificationPanel(
             contentRect: NSRect(origin: .zero, size: Self.contentSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -53,6 +54,7 @@ final class UpcomingMeetingNotificationWindowController {
         hostingController.rootView = AnyView(
             UpcomingMeetingNotificationView(
                 event: event,
+                keyboardFocus: keyboardFocus,
                 onJoin: onJoin,
                 onDismiss: onDismiss
             )
@@ -145,6 +147,14 @@ final class UpcomingMeetingNotificationWindowController {
         panel.setFrame(panelFrame(), display: true)
     }
 
+    func focusForKeyboardInteraction() -> Bool {
+        guard panel.isVisible, !isDismissing else { return false }
+        panel.makeKey()
+        guard panel.isKeyWindow else { return false }
+        keyboardFocus.focusJoinButton()
+        return true
+    }
+
     private func panelFrame() -> NSRect {
         let mouseLocation = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
@@ -167,13 +177,34 @@ final class UpcomingMeetingNotificationWindowController {
     }
 }
 
+// Borderless windows cannot normally become key, but explicit shortcut focus must
+// work without changing this panel's nonactivating behavior when it first appears.
+private final class MeetingNotificationPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+@MainActor
+private final class MeetingNotificationKeyboardFocus: ObservableObject {
+    @Published private(set) var requestID = 0
+
+    func focusJoinButton() {
+        requestID += 1
+    }
+}
+
 private struct UpcomingMeetingNotificationView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @FocusState private var isJoinButtonFocused: Bool
+    @FocusState private var focusedAction: FocusedAction?
 
     let event: CalendarEvent
+    @ObservedObject var keyboardFocus: MeetingNotificationKeyboardFocus
     let onJoin: () -> Void
     let onDismiss: () -> Void
+
+    private enum FocusedAction {
+        case join
+        case dismiss
+    }
 
     private var meetingProvider: MeetingProvider {
         event.meetingLink?.provider ?? .other
@@ -192,7 +223,7 @@ private struct UpcomingMeetingNotificationView: View {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         HStack(spacing: 6) {
                             Text(countdownText(at: context.date))
-                                .foregroundStyle(Color(nsColor: .systemOrange))
+                                .foregroundStyle(.primary)
                                 .fontWeight(.medium)
 
                             Text("·")
@@ -224,8 +255,10 @@ private struct UpcomingMeetingNotificationView: View {
                             .lineLimit(1)
                     }
                 }
-                .buttonStyle(MeetingJoinButtonStyle(isFocused: isJoinButtonFocused))
-                .focused($isJoinButtonFocused)
+                .buttonStyle(MeetingJoinButtonStyle(isFocused: focusedAction == .join))
+                .focusable()
+                .focused($focusedAction, equals: .join)
+                .keyboardShortcut(.defaultAction)
                 .fixedSize()
                 .help("Join \(meetingProvider.displayName)")
             }
@@ -259,11 +292,17 @@ private struct UpcomingMeetingNotificationView: View {
             }
             .overlay {
                 Circle()
-                    .strokeBorder(surfaceRingColor, lineWidth: 0.5)
+                    .strokeBorder(
+                        focusedAction == .dismiss ? Color.accentColor : surfaceRingColor,
+                        lineWidth: focusedAction == .dismiss ? 2 : 0.5
+                    )
                     .allowsHitTesting(false)
             }
             .frame(width: 32, height: 32)
             .contentShape(Rectangle())
+            .focusable()
+            .focused($focusedAction, equals: .dismiss)
+            .keyboardShortcut(.cancelAction)
             .help("Dismiss meeting reminder")
             .accessibilityLabel("Dismiss meeting reminder")
         }
@@ -272,6 +311,9 @@ private struct UpcomingMeetingNotificationView: View {
             height: UpcomingMeetingNotificationWindowController.contentSize.height,
             alignment: .topLeading
         )
+        .onChange(of: keyboardFocus.requestID) {
+            focusedAction = .join
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Meeting reminder")
     }

@@ -125,6 +125,29 @@ final class UpcomingMeetingNotificationScheduleTests: XCTestCase {
         XCTAssertEqual(reconcile(&state, events: [first, second], atMinute: 60)?.id, "second")
     }
 
+    func testEventRescheduledInsideLeadWindowReplacesCurrentCard() {
+        let current = makeEvent(id: "current", startMinute: 65)
+        let original = makeEvent(id: "rescheduled", startMinute: 70)
+        let movedEarlier = makeEvent(id: "rescheduled", startMinute: 63)
+        var state = UpcomingMeetingNotificationState()
+
+        XCTAssertEqual(reconcile(&state, events: [current, original], atMinute: 60)?.id, "current")
+        XCTAssertEqual(
+            reconcile(&state, events: [current, movedEarlier], atMinute: 61)?.id,
+            "rescheduled"
+        )
+    }
+
+    func testTemporarilyMissingEventDoesNotReplaceCurrentWhenItReturns() {
+        let earlier = makeEvent(id: "earlier", startMinute: 64)
+        let later = makeEvent(id: "later", startMinute: 65)
+        var state = UpcomingMeetingNotificationState()
+
+        XCTAssertEqual(reconcile(&state, events: [earlier, later], atMinute: 60)?.id, "earlier")
+        XCTAssertEqual(reconcile(&state, events: [later], atMinute: 60)?.id, "later")
+        XCTAssertEqual(reconcile(&state, events: [earlier, later], atMinute: 61)?.id, "later")
+    }
+
     func testDisabledNotificationsClearThePresentedOccurrence() {
         let event = makeEvent(id: "meeting", startMinute: 60)
         var state = UpcomingMeetingNotificationState()
