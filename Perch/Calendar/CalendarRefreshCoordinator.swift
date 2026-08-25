@@ -308,7 +308,7 @@ final class UpcomingMeetingNotificationCoordinator {
     private let now: () -> Date
     private let selectedCalendarIdentifiers: () -> Set<String>?
     private let canReadEvents: () -> Bool
-    private let openMeeting: (MeetingLink) -> Void
+    private let openMeeting: @MainActor (MeetingLink) -> Void
     private let windowController = UpcomingMeetingNotificationWindowController()
 
     private var events: [CalendarEvent] = []
@@ -324,7 +324,7 @@ final class UpcomingMeetingNotificationCoordinator {
         now: @escaping () -> Date = Date.init,
         selectedCalendarIdentifiers: @escaping () -> Set<String>?,
         canReadEvents: @escaping () -> Bool,
-        openMeeting: @escaping (MeetingLink) -> Void = UpcomingMeetingNotificationCoordinator.openMeeting
+        openMeeting: @MainActor @escaping (MeetingLink) -> Void = UpcomingMeetingNotificationCoordinator.openMeeting
     ) {
         self.schedule = schedule
         self.now = now
@@ -634,7 +634,7 @@ private struct UpcomingMeetingNotificationView: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color(nsColor: .separatorColor))
             }
-            .shadow(radius: 13, y: 6)
+            .shadow(radius: 5, y: 2)
             .offset(x: 12, y: 8)
 
             Button(action: onDismiss) {
