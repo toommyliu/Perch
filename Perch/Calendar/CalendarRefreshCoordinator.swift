@@ -158,13 +158,20 @@ struct UpcomingMeetingNotificationSchedule {
         dismissedOccurrences: Set<UpcomingMeetingOccurrence>,
         now: Date
     ) -> CalendarEvent? {
-        eligibleEvents(
+        let eligible = eligibleEvents(
             from: events,
             selectedCalendarIdentifiers: selectedCalendarIdentifiers,
             dismissedOccurrences: dismissedOccurrences
         )
-        .first { event in
+
+        if let upcoming = eligible.first(where: { event in
             notificationDate(for: event) <= now && event.startDate > now
+        }) {
+            return upcoming
+        }
+
+        return eligible.first { event in
+            notificationDate(for: event) <= now && now < expirationDate(for: event)
         }
     }
 
@@ -374,6 +381,13 @@ final class UpcomingMeetingNotificationCoordinator {
         }
 
         let selectedIdentifiers = selectedCalendarIdentifiers()
+        let candidate = schedule.eventToPresent(
+            from: events,
+            selectedCalendarIdentifiers: selectedIdentifiers,
+            dismissedOccurrences: dismissedOccurrences,
+            now: currentDate
+        )
+
         if let presentedOccurrence,
            let updatedEvent = events.first(where: {
                UpcomingMeetingOccurrence(event: $0) == presentedOccurrence
@@ -384,22 +398,38 @@ final class UpcomingMeetingNotificationCoordinator {
                now: currentDate
            )
         {
+            if let candidate,
+               UpcomingMeetingOccurrence(event: candidate) != presentedOccurrence
+            {
+                clearPresentedNotification(markAsDismissed: true)
+                present(candidate)
+                scheduleNextReconciliation(
+                    for: candidate,
+                    selectedCalendarIdentifiers: selectedIdentifiers,
+                    now: currentDate
+                )
+                return
+            }
+
             presentedEvent = updatedEvent
             showWindow(for: updatedEvent, occurrence: presentedOccurrence)
-            scheduleTimer(at: schedule.expirationDate(for: updatedEvent))
+            scheduleNextReconciliation(
+                for: updatedEvent,
+                selectedCalendarIdentifiers: selectedIdentifiers,
+                now: currentDate
+            )
             return
         }
 
         clearPresentedNotification(markAsDismissed: false)
 
-        if let event = schedule.eventToPresent(
-            from: events,
-            selectedCalendarIdentifiers: selectedIdentifiers,
-            dismissedOccurrences: dismissedOccurrences,
-            now: currentDate
-        ) {
-            present(event)
-            scheduleTimer(at: schedule.expirationDate(for: event))
+        if let candidate {
+            present(candidate)
+            scheduleNextReconciliation(
+                for: candidate,
+                selectedCalendarIdentifiers: selectedIdentifiers,
+                now: currentDate
+            )
             return
         }
 
@@ -461,6 +491,29 @@ final class UpcomingMeetingNotificationCoordinator {
         presentedOccurrence = nil
         presentedEvent = nil
         windowController.dismiss()
+    }
+
+    private func scheduleNextReconciliation(
+        for event: CalendarEvent,
+        selectedCalendarIdentifiers: Set<String>?,
+        now currentDate: Date
+    ) {
+        var dates = [schedule.expirationDate(for: event)]
+        if event.startDate > currentDate {
+            dates.append(event.startDate)
+        }
+        if let nextPresentationDate = schedule.nextPresentationDate(
+            from: events,
+            selectedCalendarIdentifiers: selectedCalendarIdentifiers,
+            dismissedOccurrences: dismissedOccurrences,
+            now: currentDate
+        ) {
+            dates.append(nextPresentationDate)
+        }
+
+        if let nextDate = dates.filter({ $0 > currentDate }).min() {
+            scheduleTimer(at: nextDate)
+        }
     }
 
     private func scheduleTimer(at date: Date) {
