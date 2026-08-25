@@ -3,6 +3,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var refreshCoordinator: CalendarRefreshCoordinator?
+    private var meetingNotificationCoordinator: UpcomingMeetingNotificationCoordinator?
     private var globalHotKeyController: GlobalHotKeyController?
     private var settingsWindowController: SettingsWindowController?
 
@@ -11,18 +12,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let arguments = ProcessInfo.processInfo.arguments
         let usesDemoData = arguments.contains("--demo-data")
         let usesUITestHost = arguments.contains("--ui-testing")
+        let showsMeetingNotificationPreview = usesDemoData
+            && arguments.contains("--show-meeting-notification")
         NSApp.setActivationPolicy(usesUITestHost ? .regular : .accessory)
         let userDefaults = usesDemoData
             ? UserDefaults(suiteName: "com.app.perch.demo") ?? .standard
             : .standard
         #else
+        let showsMeetingNotificationPreview = false
         NSApp.setActivationPolicy(.accessory)
         let userDefaults = UserDefaults.standard
         #endif
         let settingsStore = SettingsStore(userDefaults: userDefaults)
         #if DEBUG
         let calendarProvider: AgendaProviding = usesDemoData
-            ? DemoCalendarProvider()
+            ? DemoCalendarProvider(
+                showsMeetingNotificationPreview: showsMeetingNotificationPreview
+            )
             : EventKitCalendarProvider()
         #else
         let calendarProvider = EventKitCalendarProvider()
@@ -73,10 +79,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let refreshCoordinator = CalendarRefreshCoordinator {
             menuBarController.refresh()
         }
+        let meetingNotificationCoordinator = UpcomingMeetingNotificationCoordinator(
+            isEnabled: {
+                settingsStore.settings.showMeetingNotifications
+                    || showsMeetingNotificationPreview
+            },
+            selectedCalendarIdentifiers: {
+                settingsStore.settings.selectedCalendarIdentifiers
+            },
+            canReadEvents: {
+                permissionController.accessState.isSufficientForReadingEvents
+            }
+        )
+        menuBarController.onCalendarEventsUpdated = { [weak meetingNotificationCoordinator] events in
+            meetingNotificationCoordinator?.update(events: events)
+        }
 
         self.menuBarController = menuBarController
         self.settingsWindowController = settingsWindowController
         self.refreshCoordinator = refreshCoordinator
+        self.meetingNotificationCoordinator = meetingNotificationCoordinator
         let globalHotKeyController = GlobalHotKeyController(initialShortcut: settingsStore.settings.globalShortcut) { [weak menuBarController] in
             menuBarController?.toggleTrayVisibility()
         }
@@ -95,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         self.globalHotKeyController = globalHotKeyController
 
+        meetingNotificationCoordinator.start()
         refreshCoordinator.start()
         menuBarController.refresh()
 
@@ -114,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         settingsWindowController?.closeBeforeTermination()
+        meetingNotificationCoordinator?.stop()
         refreshCoordinator?.stop()
     }
 }

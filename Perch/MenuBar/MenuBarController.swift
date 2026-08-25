@@ -17,7 +17,7 @@ final class MenuBarController: NSObject {
     private let labelFormatter = MenuBarLabelFormatter()
     private let menuBuilder = MenuBuilder()
     private let eventOpenURLBuilder = CalendarEventOpenURLBuilder()
-    private let meetingLaunchURLBuilder = MeetingLaunchURLBuilder()
+    private let meetingLauncher = MeetingLauncher()
     private lazy var refreshCoalescer = CalendarRefreshCoalescer { [weak self] in
         await self?.refreshCalendarData()
     }
@@ -41,6 +41,7 @@ final class MenuBarController: NSObject {
 
     var onTrayMenuWillOpen: (() -> Void)?
     var onTrayMenuDidClose: (() -> Void)?
+    var onCalendarEventsUpdated: (([CalendarEvent]) -> Void)?
 
     #if DEBUG
     init(
@@ -244,17 +245,21 @@ final class MenuBarController: NSObject {
             allEvents = []
             allReminders = []
             lastRefreshFailed = false
+            onCalendarEventsUpdated?(allEvents)
             syncPresentation()
             return
         }
 
         let now = Date()
-        let startDate = Calendar.current.startOfDay(for: now)
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let startDate = startOfDay.addingTimeInterval(
+            -UpcomingMeetingNotificationSchedule.calendarFetchLookback
+        )
         let settings = settingsStore.settings
         let lookAheadDays = settings.lookAheadDays
         lastFetchedLookAheadDays = lookAheadDays
         lastFetchedShowReminders = settings.showReminders
-        let endDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startDate)
+        let endDate = Calendar.current.date(byAdding: .day, value: lookAheadDays, to: startOfDay)
             ?? now.addingTimeInterval(TimeInterval(lookAheadDays * 24 * 60 * 60))
         allReminders = []
         do {
@@ -263,6 +268,7 @@ final class MenuBarController: NSObject {
                 to: endDate,
                 calendarIdentifiers: nil
             )
+            onCalendarEventsUpdated?(allEvents)
         } catch {
             if !lastRefreshFailed {
                 let error = error as NSError
@@ -466,16 +472,7 @@ final class MenuBarController: NSObject {
     }
 
     private func openMeeting(_ link: MeetingLink) {
-        let url = meetingLaunchURLBuilder.launchURL(for: link)
-        if !NSWorkspace.shared.open(url) {
-            PerchLog.actions.error(
-                """
-                Meeting launch failed: \
-                provider=\(link.provider.rawValue, privacy: .public) \
-                scheme=\(url.scheme ?? "none", privacy: .public)
-                """
-            )
-        }
+        meetingLauncher.open(link)
     }
 
     private func openCalendarAppFallback() {

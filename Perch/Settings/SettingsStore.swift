@@ -7,6 +7,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
     var showEventColors: Bool
     var showAllDayEvents: Bool
     var showReminders: Bool
+    var showMeetingNotifications: Bool
     var selectedCalendarIdentifiers: Set<String>?
 
     static let supportedLookAheadDays = [1, 3, 7, 14, 30]
@@ -18,6 +19,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
         showEventColors: true,
         showAllDayEvents: true,
         showReminders: false,
+        showMeetingNotifications: false,
         selectedCalendarIdentifiers: nil
     )
 
@@ -28,6 +30,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
         showEventColors: Bool = true,
         showAllDayEvents: Bool = true,
         showReminders: Bool = false,
+        showMeetingNotifications: Bool = false,
         selectedCalendarIdentifiers: Set<String>? = nil
     ) {
         self.displayMode = displayMode
@@ -36,6 +39,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
         self.showEventColors = showEventColors
         self.showAllDayEvents = showAllDayEvents
         self.showReminders = showReminders
+        self.showMeetingNotifications = showMeetingNotifications
         self.selectedCalendarIdentifiers = selectedCalendarIdentifiers
     }
 
@@ -48,6 +52,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
         let showEventColors = try container.decodeIfPresent(Bool.self, forKey: .showEventColors) ?? true
         let showAllDayEvents = try container.decodeIfPresent(Bool.self, forKey: .showAllDayEvents) ?? true
         let showReminders = try container.decodeIfPresent(Bool.self, forKey: .showReminders) ?? false
+        let showMeetingNotifications = try container.decodeIfPresent(Bool.self, forKey: .showMeetingNotifications) ?? false
         let selectedCalendarIdentifiers = try container.decodeIfPresent(Set<String>.self, forKey: .selectedCalendarIdentifiers)
 
         self.init(
@@ -57,6 +62,7 @@ struct CalendarMenubarSettings: Codable, Equatable {
             showEventColors: showEventColors,
             showAllDayEvents: showAllDayEvents,
             showReminders: showReminders,
+            showMeetingNotifications: showMeetingNotifications,
             selectedCalendarIdentifiers: selectedCalendarIdentifiers
         )
     }
@@ -131,6 +137,12 @@ final class SettingsStore {
     func updateShowReminders(_ showReminders: Bool) {
         var currentSettings = settings
         currentSettings.showReminders = showReminders
+        settings = currentSettings
+    }
+
+    func updateShowMeetingNotifications(_ showMeetingNotifications: Bool) {
+        var currentSettings = settings
+        currentSettings.showMeetingNotifications = showMeetingNotifications
         settings = currentSettings
     }
 
