@@ -3,6 +3,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var refreshCoordinator: CalendarRefreshCoordinator?
+    private var meetingNotificationCoordinator: UpcomingMeetingNotificationCoordinator?
     private var globalHotKeyController: GlobalHotKeyController?
     private var settingsWindowController: SettingsWindowController?
 
@@ -21,12 +22,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         let settingsStore = SettingsStore(userDefaults: userDefaults)
         #if DEBUG
-        let calendarProvider: AgendaProviding = usesDemoData
+        let baseCalendarProvider: AgendaProviding = usesDemoData
             ? DemoCalendarProvider()
             : EventKitCalendarProvider()
         #else
-        let calendarProvider = EventKitCalendarProvider()
+        let baseCalendarProvider: AgendaProviding = EventKitCalendarProvider()
         #endif
+        let meetingNotificationCoordinator = UpcomingMeetingNotificationCoordinator(
+            userDefaults: userDefaults,
+            selectedCalendarIdentifiers: {
+                settingsStore.settings.selectedCalendarIdentifiers
+            },
+            canReadEvents: {
+                baseCalendarProvider.authorizationState().isSufficientForReadingEvents
+            }
+        )
+        let calendarProvider = MeetingNotificationAgendaProvider(
+            base: baseCalendarProvider,
+            didFetchEvents: { [weak meetingNotificationCoordinator] events in
+                meetingNotificationCoordinator?.update(events: events)
+            }
+        )
         let permissionController = CalendarPermissionController(permissionProvider: calendarProvider)
         let reminderPermissionController = ReminderPermissionController(permissionProvider: calendarProvider)
         let loginItemManager = LoginItemManager()
@@ -77,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.menuBarController = menuBarController
         self.settingsWindowController = settingsWindowController
         self.refreshCoordinator = refreshCoordinator
+        self.meetingNotificationCoordinator = meetingNotificationCoordinator
         let globalHotKeyController = GlobalHotKeyController(initialShortcut: settingsStore.settings.globalShortcut) { [weak menuBarController] in
             menuBarController?.toggleTrayVisibility()
         }
@@ -114,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         settingsWindowController?.closeBeforeTermination()
+        meetingNotificationCoordinator?.stop()
         refreshCoordinator?.stop()
     }
 }
