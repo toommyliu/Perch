@@ -84,6 +84,7 @@ typealias AgendaProviding = CalendarProviding & ReminderProviding
 
 #if DEBUG
 final class DemoCalendarProvider: AgendaProviding {
+    private let meetingNotificationPreviewStartDate: Date?
     private let calendars = [
         CalendarInfo(id: "demo-calendar", title: "Calendar", sourceTitle: "iCloud", color: .systemRed),
         CalendarInfo(id: "demo-home", title: "Home", sourceTitle: "iCloud", color: .systemTeal),
@@ -96,6 +97,12 @@ final class DemoCalendarProvider: AgendaProviding {
         CalendarInfo(id: "demo-classes", title: "Class schedule", sourceTitle: "School", color: .systemIndigo),
         CalendarInfo(id: "demo-family", title: "Family", sourceTitle: "Home", color: .systemOrange)
     ]
+
+    init(showsMeetingNotificationPreview: Bool = false, now: Date = Date()) {
+        meetingNotificationPreviewStartDate = showsMeetingNotificationPreview
+            ? now.addingTimeInterval(4 * 60)
+            : nil
+    }
 
     func authorizationState() -> CalendarAccessState { .fullAccess }
     func requestFullAccess() async -> CalendarAccessState { .fullAccess }
@@ -112,7 +119,7 @@ final class DemoCalendarProvider: AgendaProviding {
         let now = Date()
         let today = calendar.startOfDay(for: now)
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
-        let events = [
+        var events = [
             CalendarEvent(
                 id: "demo-design-review",
                 title: "Product design review",
@@ -174,6 +181,26 @@ final class DemoCalendarProvider: AgendaProviding {
                 location: "Dogpatch Studios"
             )
         ]
+
+        if let meetingNotificationPreviewStartDate {
+            events.insert(
+                CalendarEvent(
+                    id: "demo-meeting-notification",
+                    title: "Alice / Rob design review",
+                    startDate: meetingNotificationPreviewStartDate,
+                    endDate: meetingNotificationPreviewStartDate.addingTimeInterval(90 * 60),
+                    isAllDay: false,
+                    calendarTitle: "Work",
+                    calendarColor: .systemBlue,
+                    calendarIdentifier: "demo-work",
+                    meetingLink: MeetingLink(
+                        url: URL(string: "https://company.zoom.us/j/1234567890")!,
+                        provider: .zoom
+                    )
+                ),
+                at: 0
+            )
+        }
 
         return events.filter { event in
             event.endDate >= startDate

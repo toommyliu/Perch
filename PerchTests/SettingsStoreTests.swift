@@ -13,6 +13,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(store.settings.showEventColors)
         XCTAssertTrue(store.settings.showAllDayEvents)
         XCTAssertFalse(store.settings.showReminders)
+        XCTAssertFalse(store.settings.showMeetingNotifications)
         XCTAssertNil(store.settings.selectedCalendarIdentifiers)
     }
 
@@ -77,6 +78,16 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(reloadedStore.settings.showReminders)
     }
 
+    func testPersistedShowMeetingNotificationsRoundTripsThroughUserDefaults() {
+        let defaults = makeDefaults()
+        let store = SettingsStore(userDefaults: defaults)
+
+        store.updateShowMeetingNotifications(true)
+
+        let reloadedStore = SettingsStore(userDefaults: defaults)
+        XCTAssertTrue(reloadedStore.settings.showMeetingNotifications)
+    }
+
     func testPersistedSelectedCalendarsRoundTripsThroughUserDefaults() {
         let defaults = makeDefaults()
         let store = SettingsStore(userDefaults: defaults)
@@ -128,6 +139,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertTrue(store.settings.showEventColors)
         XCTAssertTrue(store.settings.showAllDayEvents)
         XCTAssertFalse(store.settings.showReminders)
+        XCTAssertFalse(store.settings.showMeetingNotifications)
         XCTAssertNil(store.settings.selectedCalendarIdentifiers)
     }
 

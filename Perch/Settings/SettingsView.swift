@@ -41,6 +41,13 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    @Published var showMeetingNotifications: Bool {
+        didSet {
+            settingsStore.updateShowMeetingNotifications(showMeetingNotifications)
+            onChange()
+        }
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             guard !isApplyingLoginItemState else {
@@ -140,6 +147,7 @@ final class SettingsViewModel: ObservableObject {
         self.showEventColors = settings.showEventColors
         self.showAllDayEvents = settings.showAllDayEvents
         self.showReminders = settings.showReminders
+        self.showMeetingNotifications = settings.showMeetingNotifications
         self.selectedCalendarIdentifiers = settings.selectedCalendarIdentifiers
         self.launchAtLogin = loginItemManager.isEnabled
         self.globalShortcut = settings.globalShortcut
@@ -176,6 +184,7 @@ final class SettingsViewModel: ObservableObject {
         self.showEventColors = settings.showEventColors
         self.showAllDayEvents = settings.showAllDayEvents
         self.showReminders = settings.showReminders
+        self.showMeetingNotifications = settings.showMeetingNotifications
         self.selectedCalendarIdentifiers = settings.selectedCalendarIdentifiers
         self.launchAtLogin = loginItemManager.isEnabled
         self.globalShortcut = settings.globalShortcut
@@ -547,6 +556,7 @@ struct SettingsView: View {
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             eventSettings
+            notificationSettings
             permissionsSettings
             appSettings
             #if DEBUG
@@ -791,6 +801,22 @@ struct SettingsView: View {
             .padding(.horizontal, 2)
             .padding(.vertical, 7)
             .frame(maxWidth: .infinity, minHeight: 42)
+        }
+    }
+
+    private var notificationSettings: some View {
+        SettingsSection(
+            title: "Notifications",
+            subtitle: "Optional alerts for events you can join."
+        ) {
+            SettingsRow(
+                title: "Show meeting reminders",
+                detail: "Get an alert five minutes before a meeting."
+            ) {
+                Toggle("Show meeting reminders", isOn: $model.showMeetingNotifications)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
         }
     }
 

@@ -27,6 +27,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(model.showEventColors)
         XCTAssertFalse(model.showAllDayEvents)
         XCTAssertFalse(model.showReminders)
+        XCTAssertFalse(model.showMeetingNotifications)
         XCTAssertEqual(model.globalShortcut, shortcut)
         XCTAssertEqual(model.accessState, .writeOnly)
         XCTAssertEqual(model.accessActionTitle, "Privacy Settings...")
@@ -384,6 +385,24 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(model.reminderAccessState, .fullAccess)
         XCTAssertEqual(reminderProvider.requestCount, 1)
         XCTAssertEqual(accessCompletionCount, 1)
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    func testEnablingMeetingNotificationsPersistsAndNotifies() {
+        let settingsStore = SettingsStore(userDefaults: makeDefaults())
+        let provider = FakePermissionProvider(state: .fullAccess)
+        let permissionController = CalendarPermissionController(permissionProvider: provider)
+        var changeCount = 0
+        let model = SettingsViewModel(
+            settingsStore: settingsStore,
+            permissionController: permissionController
+        ) {
+            changeCount += 1
+        }
+
+        model.showMeetingNotifications = true
+
+        XCTAssertTrue(settingsStore.settings.showMeetingNotifications)
         XCTAssertEqual(changeCount, 1)
     }
 

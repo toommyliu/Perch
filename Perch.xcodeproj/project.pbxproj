@@ -52,6 +52,11 @@
 		10000000000000000000002B /* MenuIconRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012B /* MenuIconRendererTests.swift */; };
 		10000000000000000000002C /* CalendarRefreshScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012C /* CalendarRefreshScheduleTests.swift */; };
 		10000000000000000000002D /* MenuBarStatusItemWidthMeasurerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */; };
+		10000000000000000000002E /* MeetingLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012E /* MeetingLauncher.swift */; };
+		10000000000000000000002F /* UpcomingMeetingNotificationSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000012F /* UpcomingMeetingNotificationSchedule.swift */; };
+		100000000000000000000030 /* UpcomingMeetingNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000130 /* UpcomingMeetingNotificationCoordinator.swift */; };
+		100000000000000000000031 /* UpcomingMeetingNotificationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000131 /* UpcomingMeetingNotificationWindowController.swift */; };
+		100000000000000000000032 /* UpcomingMeetingNotificationScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000132 /* UpcomingMeetingNotificationScheduleTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -109,6 +114,11 @@
 		10000000000000000000012B /* MenuIconRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuIconRendererTests.swift; sourceTree = "<group>"; };
 		10000000000000000000012C /* CalendarRefreshScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarRefreshScheduleTests.swift; sourceTree = "<group>"; };
 		10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStatusItemWidthMeasurerTests.swift; sourceTree = "<group>"; };
+		10000000000000000000012E /* MeetingLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingLauncher.swift; sourceTree = "<group>"; };
+		10000000000000000000012F /* UpcomingMeetingNotificationSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingMeetingNotificationSchedule.swift; sourceTree = "<group>"; };
+		100000000000000000000130 /* UpcomingMeetingNotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingMeetingNotificationCoordinator.swift; sourceTree = "<group>"; };
+		100000000000000000000131 /* UpcomingMeetingNotificationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingMeetingNotificationWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000132 /* UpcomingMeetingNotificationScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingMeetingNotificationScheduleTests.swift; sourceTree = "<group>"; };
 		100000000000000000000201 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
 		100000000000000000000202 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		100000000000000000000203 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
@@ -154,6 +164,7 @@
 				100000000000000000000101 /* AppDelegate.swift */,
 				100000000000000000000806 /* Models */,
 				100000000000000000000807 /* Calendar */,
+				10000000000000000000080C /* MeetingNotifications */,
 				100000000000000000000808 /* MenuBar */,
 				100000000000000000000809 /* Settings */,
 				10000000000000000000080A /* Utilities */,
@@ -180,6 +191,7 @@
 				10000000000000000000012A /* MeetingLinkTests.swift */,
 				10000000000000000000012C /* CalendarRefreshScheduleTests.swift */,
 				10000000000000000000012D /* MenuBarStatusItemWidthMeasurerTests.swift */,
+				100000000000000000000132 /* UpcomingMeetingNotificationScheduleTests.swift */,
 			);
 			path = PerchTests;
 			sourceTree = "<group>";
@@ -221,10 +233,21 @@
 				100000000000000000000106 /* EventKitCalendarProvider.swift */,
 				100000000000000000000118 /* CalendarEventOpenURLBuilder.swift */,
 				100000000000000000000119 /* MeetingLink.swift */,
+				10000000000000000000012E /* MeetingLauncher.swift */,
 				100000000000000000000107 /* CalendarRefreshCoordinator.swift */,
 				100000000000000000000115 /* CalendarPermissionController.swift */,
 			);
 			path = Calendar;
+			sourceTree = "<group>";
+		};
+		10000000000000000000080C /* MeetingNotifications */ = {
+			isa = PBXGroup;
+			children = (
+				10000000000000000000012F /* UpcomingMeetingNotificationSchedule.swift */,
+				100000000000000000000130 /* UpcomingMeetingNotificationCoordinator.swift */,
+				100000000000000000000131 /* UpcomingMeetingNotificationWindowController.swift */,
+			);
+			path = MeetingNotifications;
 			sourceTree = "<group>";
 		};
 		100000000000000000000808 /* MenuBar */ = {
@@ -392,6 +415,10 @@
 				100000000000000000000018 /* CalendarEventVisibility.swift in Sources */,
 				100000000000000000000019 /* CalendarEventOpenURLBuilder.swift in Sources */,
 				10000000000000000000001A /* MeetingLink.swift in Sources */,
+				10000000000000000000002E /* MeetingLauncher.swift in Sources */,
+				10000000000000000000002F /* UpcomingMeetingNotificationSchedule.swift in Sources */,
+				100000000000000000000030 /* UpcomingMeetingNotificationCoordinator.swift in Sources */,
+				100000000000000000000031 /* UpcomingMeetingNotificationWindowController.swift in Sources */,
 				10000000000000000000001B /* DateIconDebugSettings.swift in Sources */,
 				10000000000000000000001C /* EventTitleTruncator.swift in Sources */,
 				10000000000000000000001F /* MenuBarLabelWidthLimiter.swift in Sources */,
@@ -419,6 +446,7 @@
 				10000000000000000000002B /* MenuIconRendererTests.swift in Sources */,
 				10000000000000000000002C /* CalendarRefreshScheduleTests.swift in Sources */,
 				10000000000000000000002D /* MenuBarStatusItemWidthMeasurerTests.swift in Sources */,
+				100000000000000000000032 /* UpcomingMeetingNotificationScheduleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
