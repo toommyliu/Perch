@@ -257,6 +257,7 @@ private struct UpcomingMeetingNotificationView: View {
                 }
                 .buttonStyle(MeetingJoinButtonStyle(isFocused: focusedAction == .join))
                 .focusable()
+                .focusEffectDisabled()
                 .focused($focusedAction, equals: .join)
                 .keyboardShortcut(.defaultAction)
                 .fixedSize()
@@ -301,6 +302,7 @@ private struct UpcomingMeetingNotificationView: View {
             .frame(width: 32, height: 32)
             .contentShape(Rectangle())
             .focusable()
+            .focusEffectDisabled()
             .focused($focusedAction, equals: .dismiss)
             .keyboardShortcut(.cancelAction)
             .help("Dismiss meeting reminder")
