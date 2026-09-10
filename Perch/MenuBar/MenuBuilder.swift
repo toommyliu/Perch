@@ -7,6 +7,9 @@ enum CalendarMenuAction: Equatable {
     case openCalendar
     case openReminders
     case openEvent(eventIdentifier: String, startDate: Date)
+    case hideEvent(CalendarEventOccurrence)
+    case hideFromBar(CalendarEventOccurrence)
+    case restoreEvent(CalendarEventOccurrence)
     case joinMeeting(MeetingLink)
     case copyMeetingLink(URL)
     case openSettings
@@ -104,6 +107,10 @@ final class TrayMenu: NSMenu {
     fileprivate static let significantModifierFlags: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.isUnmodifiedNumber {
+            return activeActionMenu?.performKeyEquivalent(with: event) ?? false
+        }
+
         if let item = items.first(where: { $0.matchesKeyEquivalent(event) }) {
             cancelTracking()
             performAction(for: item)
@@ -123,6 +130,55 @@ final class TrayMenu: NSMenu {
         }
 
         NSApp.sendAction(action, to: item.target, from: item)
+    }
+}
+
+/// Number keys belong to the visible submenu; AppKit otherwise searches key equivalents in closed submenus too.
+final class NumberedActionMenu: NSMenu, NSMenuDelegate {
+    private(set) var isOpen = false
+
+    override init(title: String) {
+        super.init(title: title)
+        delegate = self
+    }
+
+    required init(coder: NSCoder) {
+        super.init(coder: coder)
+        delegate = self
+    }
+
+    func menuWillOpen(_ menu: NSMenu) { isOpen = true }
+    func menuDidClose(_ menu: NSMenu) { isOpen = false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isOpen, event.isUnmodifiedNumber,
+              let item = items.first(where: { $0.matchesKeyEquivalent(event) }),
+              let action = item.action
+        else { return false }
+
+        var root: NSMenu = self
+        while let parent = root.supermenu { root = parent }
+        root.cancelTracking()
+        NSApp.sendAction(action, to: item.target, from: item)
+        return true
+    }
+}
+
+private extension NSMenu {
+    var activeActionMenu: NumberedActionMenu? {
+        for item in items {
+            if let active = item.submenu?.activeActionMenu { return active }
+        }
+        if let menu = self as? NumberedActionMenu, menu.isOpen { return menu }
+        return nil
+    }
+}
+
+private extension NSEvent {
+    var isUnmodifiedNumber: Bool {
+        type == .keyDown
+            && modifierFlags.intersection(TrayMenu.significantModifierFlags).isEmpty
+            && charactersIgnoringModifiers.map { $0.count == 1 && "123456789".contains($0) } == true
     }
 }
 
@@ -165,6 +221,7 @@ struct MenuBuilder {
         showAllDayEvents: Bool = true,
         showReminders: Bool = false,
         selectedCalendarIdentifiers: Set<String>? = nil,
+        hiddenEvents: [HiddenCalendarEvent] = [],
         displayMode: MenuBarDisplayMode = .within6Hours,
         now: Date = Date(),
         calendar: Calendar = .current
@@ -205,6 +262,7 @@ struct MenuBuilder {
                 showAllDayEvents: showAllDayEvents,
                 showReminders: showReminders,
                 selectedCalendarIdentifiers: selectedCalendarIdentifiers,
+                hiddenEvents: hiddenEvents.filter { $0.endDate > now },
                 displayMode: displayMode,
                 now: now,
                 calendar: calendar
@@ -287,16 +345,20 @@ struct MenuBuilder {
         showAllDayEvents: Bool,
         showReminders: Bool,
         selectedCalendarIdentifiers: Set<String>?,
+        hiddenEvents: [HiddenCalendarEvent],
         displayMode: MenuBarDisplayMode,
         now: Date,
         calendar: Calendar
     ) -> CalendarMenuSnapshot {
+        let completelyHiddenEvents = hiddenEvents.filter { $0.scope == .completely }
+        let barHiddenOccurrences = Set(hiddenEvents.filter { $0.scope == .bar }.map(\.occurrence))
         let visibleItems = AgendaItemVisibility.visibleItems(
             events: events,
             reminders: reminders,
             includeAllDayEvents: showAllDayEvents,
             includeReminders: showReminders,
             selectedCalendarIdentifiers: selectedCalendarIdentifiers,
+            hiddenOccurrences: Set(completelyHiddenEvents.map(\.occurrence)),
             now: now,
             calendar: calendar
         )
@@ -320,13 +382,15 @@ struct MenuBuilder {
                         ]
                     )
                 ],
-                footerRows: standardFooterRows(globalShortcut: globalShortcut)
+                footerRows: hiddenEventRows(completelyHiddenEvents, now: now, calendar: calendar)
+                    + standardFooterRows(globalShortcut: globalShortcut)
             )
         }
 
         let prioritizedIndex = AgendaItemVisibility.prioritizedIndex(
             in: visibleItems,
             displayMode: displayMode,
+            excludingOccurrences: barHiddenOccurrences,
             now: now
         )
         let prioritizedItem = prioritizedIndex.map { visibleItems[$0] }
@@ -348,7 +412,7 @@ struct MenuBuilder {
                     locale: locale
                 ),
                 rows: grouped[day, default: []].flatMap { item in
-                    rows(for: item, showEventColors: showEventColors, calendar: calendar)
+                    rows(for: item, showEventColors: showEventColors, barHiddenOccurrences: barHiddenOccurrences, calendar: calendar)
                 }
             )
         }
@@ -357,7 +421,7 @@ struct MenuBuilder {
             sections.insert(
                 CalendarMenuSection(
                     title: upcomingSectionTitle(for: prioritizedItem, now: now, calendar: calendar),
-                    rows: rows(for: prioritizedItem, showEventColors: showEventColors, calendar: calendar)
+                    rows: rows(for: prioritizedItem, showEventColors: showEventColors, barHiddenOccurrences: barHiddenOccurrences, calendar: calendar)
                 ),
                 at: 0
             )
@@ -365,46 +429,55 @@ struct MenuBuilder {
 
         return CalendarMenuSnapshot(
             sections: sections,
-            footerRows: standardFooterRows(globalShortcut: globalShortcut)
+            footerRows: hiddenEventRows(completelyHiddenEvents, now: now, calendar: calendar)
+                + standardFooterRows(globalShortcut: globalShortcut)
         )
+    }
+
+    private func hiddenEventRows(_ events: [HiddenCalendarEvent], now: Date, calendar: Calendar) -> [CalendarMenuRow] {
+        guard !events.isEmpty else { return [] }
+        return [CalendarMenuRow(
+            title: "Hidden Events (\(events.count))",
+            isEnabled: true,
+            color: nil,
+            action: nil,
+            submenuRows: events.map { event in
+                let day = DateFormatting.menuSectionTitle(
+                    for: event.occurrence.startDate, now: now, calendar: calendar, locale: locale
+                )
+                return CalendarMenuRow(
+                    title: "\(day) · \(EventTitleTruncator.truncate(event.title, maxLength: maxEventTitleLength))",
+                    toolTip: event.title,
+                    isEnabled: true,
+                    color: nil,
+                    action: nil,
+                    submenuRows: [CalendarMenuRow(
+                        title: "Show Again", isEnabled: true, color: nil,
+                        action: .restoreEvent(event.occurrence)
+                    )]
+                )
+            }
+        )]
     }
 
     private func rows(
         for event: CalendarEvent,
         showEventColors: Bool,
+        isHiddenFromBar: Bool,
         calendar: Calendar
     ) -> [CalendarMenuRow] {
         let openEventAction = CalendarMenuAction.openEvent(eventIdentifier: event.id, startDate: event.startDate)
         let rowTitle = rowTitle(for: event, calendar: calendar)
         let fullRowTitle = fullRowTitle(for: event, calendar: calendar)
         let rowToolTip = rowTitle == fullRowTitle ? nil : fullRowTitle
-        let eventRow = CalendarMenuRow(
-            title: rowTitle,
-            toolTip: rowToolTip,
-            isEnabled: true,
-            color: showEventColors ? event.calendarColor : .perchMutedWhite,
-            action: openEventAction
-        )
-
-        guard let meetingLink = event.meetingLink else {
-            return [eventRow]
-        }
-
-        let joinTitle = "Join \(meetingLink.provider.displayName)"
-
-        let meetingEventRow = CalendarMenuRow(
-            title: rowTitle,
-            toolTip: rowToolTip,
-            isEnabled: true,
-            color: showEventColors ? event.calendarColor : .perchMutedWhite,
-            action: nil,
-            submenuRows: [
+        var actions: [CalendarMenuRow] = []
+        if let meetingLink = event.meetingLink {
+            actions = [
                 CalendarMenuRow(
-                    title: joinTitle,
+                    title: "Join \(meetingLink.provider.displayName)",
                     isEnabled: true,
                     color: nil,
-                    action: .joinMeeting(meetingLink),
-                    keyEquivalent: "j"
+                    action: .joinMeeting(meetingLink)
                 ),
                 CalendarMenuRow(
                     title: "Copy Meeting Link",
@@ -412,12 +485,32 @@ struct MenuBuilder {
                     color: nil,
                     action: .copyMeetingLink(meetingLink.url)
                 ),
-                .separator,
-                CalendarMenuRow(title: "Show in Calendar", isEnabled: true, color: nil, action: openEventAction)
+                .separator
             ]
-        )
+        }
+        actions += [
+            CalendarMenuRow(title: "Show in Calendar", isEnabled: true, color: nil, action: openEventAction),
+            .separator,
+            CalendarMenuRow(
+                title: isHiddenFromBar ? "Show in menu bar" : "Hide from menu bar", isEnabled: true, color: nil,
+                action: isHiddenFromBar
+                    ? .restoreEvent(CalendarEventOccurrence(event: event))
+                    : .hideFromBar(CalendarEventOccurrence(event: event))
+            ),
+            CalendarMenuRow(
+                title: "Hide completely", isEnabled: true, color: nil,
+                action: .hideEvent(CalendarEventOccurrence(event: event))
+            )
+        ]
 
-        return [meetingEventRow]
+        return [CalendarMenuRow(
+            title: rowTitle,
+            toolTip: rowToolTip,
+            isEnabled: true,
+            color: showEventColors ? event.calendarColor : .perchMutedWhite,
+            action: nil,
+            submenuRows: actions
+        )]
     }
 
     private func row(for reminder: CalendarReminder, calendar: Calendar) -> CalendarMenuRow {
@@ -437,11 +530,15 @@ struct MenuBuilder {
     private func rows(
         for item: AgendaItem,
         showEventColors: Bool,
+        barHiddenOccurrences: Set<CalendarEventOccurrence>,
         calendar: Calendar
     ) -> [CalendarMenuRow] {
         switch item {
         case let .event(event):
-            rows(for: event, showEventColors: showEventColors, calendar: calendar)
+            rows(
+                for: event, showEventColors: showEventColors,
+                isHiddenFromBar: barHiddenOccurrences.contains(CalendarEventOccurrence(event: event)), calendar: calendar
+            )
         case let .reminder(reminder):
             [row(for: reminder, calendar: calendar)]
         }
@@ -551,9 +648,17 @@ struct MenuBuilder {
             item.image = MenuIconRenderer.colorBar(color: color, size: NSSize(width: 4, height: 14))
         }
         if !row.submenuRows.isEmpty {
-            let submenu = NSMenu()
+            let submenu = NumberedActionMenu(title: row.title)
+            var shortcutNumber = 1
             for submenuRow in row.submenuRows {
-                submenu.addItem(menuItem(for: submenuRow, target: target))
+                let submenuItem = menuItem(for: submenuRow, target: target)
+                if !submenuRow.isSeparator, !submenuRow.isHidden, submenuRow.isEnabled,
+                   submenuRow.action != nil, shortcutNumber <= 9 {
+                    submenuItem.keyEquivalent = String(shortcutNumber)
+                    submenuItem.keyEquivalentModifierMask = []
+                    shortcutNumber += 1
+                }
+                submenu.addItem(submenuItem)
             }
             item.submenu = submenu
         }
@@ -573,6 +678,12 @@ struct MenuBuilder {
             return #selector(MenuBarController.openRemindersApp)
         case .openEvent:
             return #selector(MenuBarController.openCalendarEvent(_:))
+        case .hideEvent:
+            return #selector(MenuBarController.hideCalendarEvent(_:))
+        case .hideFromBar:
+            return #selector(MenuBarController.hideCalendarEvent(_:))
+        case .restoreEvent:
+            return #selector(MenuBarController.restoreCalendarEvent(_:))
         case .joinMeeting:
             return #selector(MenuBarController.joinMeetingFromMenu(_:))
         case .copyMeetingLink:

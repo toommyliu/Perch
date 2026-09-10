@@ -5,6 +5,7 @@ enum CalendarEventVisibility {
         from events: [CalendarEvent],
         includeAllDayEvents: Bool,
         selectedCalendarIdentifiers: Set<String>? = nil,
+        hiddenOccurrences: Set<CalendarEventOccurrence> = [],
         now: Date
     ) -> [CalendarEvent] {
         events
@@ -12,6 +13,7 @@ enum CalendarEventVisibility {
                 event.endDate >= now
                     && (includeAllDayEvents || !event.isAllDay)
                     && (selectedCalendarIdentifiers?.contains(event.calendarIdentifier) ?? true)
+                    && !hiddenOccurrences.contains(CalendarEventOccurrence(event: event))
             }
             .sorted(by: isOrderedBefore)
     }
@@ -86,6 +88,7 @@ enum AgendaItemVisibility {
         includeAllDayEvents: Bool,
         includeReminders: Bool,
         selectedCalendarIdentifiers: Set<String>?,
+        hiddenOccurrences: Set<CalendarEventOccurrence> = [],
         now: Date,
         calendar: Calendar
     ) -> [AgendaItem] {
@@ -93,6 +96,7 @@ enum AgendaItemVisibility {
             from: events,
             includeAllDayEvents: includeAllDayEvents,
             selectedCalendarIdentifiers: selectedCalendarIdentifiers,
+            hiddenOccurrences: hiddenOccurrences,
             now: now
         )
         let startOfToday = calendar.startOfDay(for: now)
@@ -110,10 +114,15 @@ enum AgendaItemVisibility {
     static func prioritizedIndex(
         in items: [AgendaItem],
         displayMode: MenuBarDisplayMode,
+        excludingOccurrences: Set<CalendarEventOccurrence> = [],
         now: Date
     ) -> Int? {
         var allDayIndex: Int?
         for index in items.indices where shouldPrioritize(items[index], displayMode: displayMode, now: now) {
+            if case let .event(event) = items[index],
+               excludingOccurrences.contains(CalendarEventOccurrence(event: event)) {
+                continue
+            }
             if case let .event(event) = items[index], event.isAllDay {
                 if allDayIndex == nil {
                     allDayIndex = index

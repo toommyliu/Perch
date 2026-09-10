@@ -13,6 +13,7 @@ final class MenuBarController: NSObject {
     private let permissionController: CalendarPermissionController
     private let reminderPermissionController: ReminderPermissionController?
     private let settingsStore: SettingsStore
+    private let hiddenEventStore: HiddenEventStore
     private let settingsWindowController: SettingsWindowController
     private let labelFormatter = MenuBarLabelFormatter()
     private let menuBuilder = MenuBuilder()
@@ -26,6 +27,7 @@ final class MenuBarController: NSObject {
     #endif
 
     private var allEvents: [CalendarEvent] = []
+    private var notificationEvents: [CalendarEvent] = []
     private var allReminders: [CalendarReminder] = []
     private var accessState: CalendarAccessState = .unknown
     private var reminderAccessState: ReminderAccessState = .unknown
@@ -50,6 +52,7 @@ final class MenuBarController: NSObject {
         reminderProvider: ReminderEventProviding? = nil,
         reminderPermissionController: ReminderPermissionController? = nil,
         settingsStore: SettingsStore,
+        hiddenEventStore: HiddenEventStore = HiddenEventStore(),
         settingsWindowController: SettingsWindowController,
         dateIconDebugSettings: DateIconDebugSettings
     ) {
@@ -58,6 +61,7 @@ final class MenuBarController: NSObject {
         self.reminderProvider = reminderProvider
         self.reminderPermissionController = reminderPermissionController
         self.settingsStore = settingsStore
+        self.hiddenEventStore = hiddenEventStore
         self.settingsWindowController = settingsWindowController
         self.dateIconDebugSettings = dateIconDebugSettings
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -71,6 +75,7 @@ final class MenuBarController: NSObject {
         reminderProvider: ReminderEventProviding? = nil,
         reminderPermissionController: ReminderPermissionController? = nil,
         settingsStore: SettingsStore,
+        hiddenEventStore: HiddenEventStore = HiddenEventStore(),
         settingsWindowController: SettingsWindowController
     ) {
         self.calendarProvider = calendarProvider
@@ -78,6 +83,7 @@ final class MenuBarController: NSObject {
         self.reminderProvider = reminderProvider
         self.reminderPermissionController = reminderPermissionController
         self.settingsStore = settingsStore
+        self.hiddenEventStore = hiddenEventStore
         self.settingsWindowController = settingsWindowController
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -243,6 +249,7 @@ final class MenuBarController: NSObject {
         reminderAccessState = reminderPermissionController?.refreshStatus() ?? .unknown
         guard accessState.isSufficientForReadingEvents else {
             allEvents = []
+            notificationEvents = []
             allReminders = []
             lastRefreshFailed = false
             onCalendarEventsUpdated?(allEvents)
@@ -273,7 +280,9 @@ final class MenuBarController: NSObject {
             )
             // The extended query catches reminder windows crossing the agenda horizon.
             allEvents = fetchedEvents.filter { $0.startDate <= agendaEndDate }
-            onCalendarEventsUpdated?(fetchedEvents)
+            notificationEvents = fetchedEvents
+            hiddenEventStore.reconcile(events: fetchedEvents, now: now)
+            publishNotificationEvents()
         } catch {
             if !lastRefreshFailed {
                 let error = error as NSError
@@ -317,6 +326,13 @@ final class MenuBarController: NSObject {
         updateStatusItem()
     }
 
+    private func publishNotificationEvents() {
+        let hiddenOccurrences = hiddenEventStore.hiddenOccurrences(now: Date(), scope: .completely)
+        onCalendarEventsUpdated?(notificationEvents.filter {
+            !hiddenOccurrences.contains(CalendarEventOccurrence(event: $0))
+        })
+    }
+
     private func makeAgendaMenu() -> NSMenu {
         let settings = settingsStore.settings
         let snapshot = menuBuilder.snapshot(
@@ -328,6 +344,7 @@ final class MenuBarController: NSObject {
             showAllDayEvents: settings.showAllDayEvents,
             showReminders: settings.showReminders,
             selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
+            hiddenEvents: hiddenEventStore.activeEvents(now: Date()),
             displayMode: settings.displayMode
         )
         let menu = menuBuilder.makeMenu(from: snapshot, target: self)
@@ -353,7 +370,8 @@ final class MenuBarController: NSObject {
         switch labelFormatter.labelContent(
             events: allEvents,
             reminders: allReminders,
-            settings: settingsStore.settings
+            settings: settingsStore.settings,
+            hiddenOccurrences: hiddenEventStore.hiddenOccurrences(now: Date())
         ) {
         case let .dateIcon(day):
             #if DEBUG
@@ -463,6 +481,33 @@ final class MenuBarController: NSObject {
             openCalendarAppFallback()
             return
         }
+    }
+
+    @objc func hideCalendarEvent(_ sender: NSMenuItem) {
+        let occurrence: CalendarEventOccurrence
+        let scope: HiddenEventScope
+        switch sender.representedObject as? CalendarMenuAction {
+        case let .hideEvent(value):
+            occurrence = value
+            scope = .completely
+        case let .hideFromBar(value):
+            occurrence = value
+            scope = .bar
+        default:
+            return
+        }
+        guard let event = allEvents.first(where: { CalendarEventOccurrence(event: $0) == occurrence })
+        else { return }
+        hiddenEventStore.hide(event, scope: scope, now: Date())
+        publishNotificationEvents()
+        syncPresentation()
+    }
+
+    @objc func restoreCalendarEvent(_ sender: NSMenuItem) {
+        guard case let .restoreEvent(occurrence)? = sender.representedObject as? CalendarMenuAction else { return }
+        hiddenEventStore.restore(occurrence, now: Date())
+        publishNotificationEvents()
+        syncPresentation()
     }
 
     @objc func joinMeetingFromMenu(_ sender: NSMenuItem) {

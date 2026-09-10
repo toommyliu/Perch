@@ -57,6 +57,8 @@
 		100000000000000000000030 /* UpcomingMeetingNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000130 /* UpcomingMeetingNotificationCoordinator.swift */; };
 		100000000000000000000031 /* UpcomingMeetingNotificationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000131 /* UpcomingMeetingNotificationWindowController.swift */; };
 		100000000000000000000032 /* UpcomingMeetingNotificationScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000132 /* UpcomingMeetingNotificationScheduleTests.swift */; };
+		100000000000000000000033 /* HiddenEventStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000133 /* HiddenEventStore.swift */; };
+		100000000000000000000034 /* HiddenEventStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000134 /* HiddenEventStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -124,6 +126,8 @@
 		100000000000000000000203 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		100000000000000000000601 /* Perch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Perch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		100000000000000000000602 /* PerchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PerchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		100000000000000000000133 /* HiddenEventStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenEventStore.swift; sourceTree = "<group>"; };
+		100000000000000000000134 /* HiddenEventStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenEventStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +186,7 @@
 				10000000000000000000012B /* MenuIconRendererTests.swift */,
 				100000000000000000000122 /* MenuBuilderTests.swift */,
 				100000000000000000000123 /* SettingsStoreTests.swift */,
+				100000000000000000000134 /* HiddenEventStoreTests.swift */,
 				100000000000000000000124 /* CalendarAccessStateTests.swift */,
 				100000000000000000000125 /* CalendarPermissionControllerTests.swift */,
 				100000000000000000000126 /* SettingsViewModelTests.swift */,
@@ -222,6 +227,7 @@
 				100000000000000000000103 /* MenuBarDisplayMode.swift */,
 				100000000000000000000104 /* CalendarEvent.swift */,
 				100000000000000000000117 /* CalendarEventVisibility.swift */,
+				100000000000000000000133 /* HiddenEventStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -413,6 +419,7 @@
 				100000000000000000000010 /* PerchLog.swift in Sources */,
 				100000000000000000000017 /* GlobalShortcut.swift in Sources */,
 				100000000000000000000018 /* CalendarEventVisibility.swift in Sources */,
+				100000000000000000000033 /* HiddenEventStore.swift in Sources */,
 				100000000000000000000019 /* CalendarEventOpenURLBuilder.swift in Sources */,
 				10000000000000000000001A /* MeetingLink.swift in Sources */,
 				10000000000000000000002E /* MeetingLauncher.swift in Sources */,
@@ -436,6 +443,7 @@
 				100000000000000000000021 /* MenuBarLabelFormatterTests.swift in Sources */,
 				100000000000000000000022 /* MenuBuilderTests.swift in Sources */,
 				100000000000000000000023 /* SettingsStoreTests.swift in Sources */,
+				100000000000000000000034 /* HiddenEventStoreTests.swift in Sources */,
 				100000000000000000000024 /* CalendarAccessStateTests.swift in Sources */,
 				100000000000000000000025 /* CalendarPermissionControllerTests.swift in Sources */,
 				100000000000000000000026 /* SettingsViewModelTests.swift in Sources */,
