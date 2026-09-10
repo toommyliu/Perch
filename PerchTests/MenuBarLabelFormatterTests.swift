@@ -185,6 +185,44 @@ final class MenuBarLabelFormatterTests: XCTestCase {
         XCTAssertEqual(content, .event(title: "Conference", relativeText: "All-day", color: .systemBlue))
     }
 
+    func testAllDayHolidayDoesNotDisplaceUpcomingOrOngoingMeeting() {
+        let holiday = CalendarEvent(
+            id: "holiday",
+            title: "Rosh Hashanah",
+            startDate: date(hour: 0, minute: 0),
+            endDate: date(day: 7, hour: 0, minute: 0),
+            isAllDay: true,
+            calendarTitle: "US Holidays",
+            calendarColor: .systemBlue
+        )
+        let meeting = makeEvent(title: "Standup", start: date(hour: 10, minute: 0), end: date(hour: 10, minute: 30))
+
+        for (now, expectedRelativeText) in [
+            (date(hour: 9, minute: 30), "in 30m"),
+            (date(hour: 10, minute: 15), "15m left")
+        ] {
+            let content = formatter.labelContent(
+                events: [holiday, meeting],
+                settings: .defaultValue,
+                now: now,
+                calendar: calendar
+            )
+
+            XCTAssertEqual(content, .event(title: "Standup", relativeText: expectedRelativeText, color: .systemBlue))
+        }
+
+        for now in [date(hour: 3, minute: 59), date(hour: 10, minute: 31)] {
+            let content = formatter.labelContent(
+                events: [holiday, meeting],
+                settings: .defaultValue,
+                now: now,
+                calendar: calendar
+            )
+
+            XCTAssertEqual(content, .event(title: "Rosh Hashanah", relativeText: "All-day", color: .systemBlue))
+        }
+    }
+
     func testAllDayEventIsIgnoredWhenDisabled() {
         let now = date(hour: 9, minute: 30)
         let allDayEvent = CalendarEvent(

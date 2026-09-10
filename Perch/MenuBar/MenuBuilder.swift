@@ -324,9 +324,11 @@ struct MenuBuilder {
             )
         }
 
-        let prioritizedIndex = visibleItems.firstIndex {
-            AgendaItemVisibility.shouldPrioritize($0, displayMode: displayMode, now: now)
-        }
+        let prioritizedIndex = AgendaItemVisibility.prioritizedIndex(
+            in: visibleItems,
+            displayMode: displayMode,
+            now: now
+        )
         let prioritizedItem = prioritizedIndex.map { visibleItems[$0] }
         var remainingItems = visibleItems
         if let prioritizedIndex {
