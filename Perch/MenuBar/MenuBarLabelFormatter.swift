@@ -43,6 +43,7 @@ struct MenuBarLabelFormatter {
         events: [CalendarEvent],
         reminders: [CalendarReminder] = [],
         settings: CalendarMenubarSettings,
+        hiddenOccurrences: Set<CalendarEventOccurrence> = [],
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> MenuBarLabelContent {
@@ -54,6 +55,7 @@ struct MenuBarLabelFormatter {
             includeAllDayEvents: settings.showAllDayEvents,
             includeReminders: settings.showReminders,
             selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
+            hiddenOccurrences: hiddenOccurrences,
             now: now,
             calendar: calendar
         )
