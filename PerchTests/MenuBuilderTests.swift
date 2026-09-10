@@ -112,6 +112,30 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows[0].title, "All-day · Conference")
     }
 
+    func testMeetingIsPrioritizedWhileAllDayHolidayRemainsInDayGroup() {
+        let holiday = CalendarEvent(
+            id: "holiday",
+            title: "Rosh Hashanah",
+            startDate: date(day: 6, hour: 0, minute: 0),
+            endDate: date(day: 7, hour: 0, minute: 0),
+            isAllDay: true,
+            calendarTitle: "US Holidays",
+            calendarColor: .systemBlue
+        )
+        let meeting = event(title: "Standup", start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 10, minute: 30))
+
+        let snapshot = builder.snapshot(
+            accessState: .fullAccess,
+            events: [holiday, meeting],
+            now: date(day: 6, hour: 9, minute: 30),
+            calendar: calendar
+        )
+
+        XCTAssertEqual(snapshot.sections.map(\.title), ["Upcoming in 30 min", "Today"])
+        XCTAssertEqual(snapshot.sections[0].rows.map(\.title), ["10:00\u{202F}AM · Standup"])
+        XCTAssertEqual(snapshot.sections[1].rows.map(\.title), ["All-day · Rosh Hashanah"])
+    }
+
     func testLongTimedEventTitleTruncatesNameButKeepsTimePrefix() {
         let now = date(day: 6, hour: 9, minute: 0)
         let longTitle = "12345678901234567890123456789012345678901234567890"

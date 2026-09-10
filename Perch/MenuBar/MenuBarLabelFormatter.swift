@@ -48,7 +48,7 @@ struct MenuBarLabelFormatter {
     ) -> MenuBarLabelContent {
         let day = calendar.component(.day, from: now)
 
-        guard let nextItem = AgendaItemVisibility.visibleItems(
+        let visibleItems = AgendaItemVisibility.visibleItems(
             events: events,
             reminders: reminders,
             includeAllDayEvents: settings.showAllDayEvents,
@@ -56,17 +56,17 @@ struct MenuBarLabelFormatter {
             selectedCalendarIdentifiers: settings.selectedCalendarIdentifiers,
             now: now,
             calendar: calendar
-        ).first,
-              AgendaItemVisibility.shouldPrioritize(
-                nextItem,
-                displayMode: settings.displayMode,
-                now: now
-              )
+        )
+        guard let prioritizedIndex = AgendaItemVisibility.prioritizedIndex(
+            in: visibleItems,
+            displayMode: settings.displayMode,
+            now: now
+        )
         else {
             return .dateIcon(day: day)
         }
 
-        switch nextItem {
+        switch visibleItems[prioritizedIndex] {
         case let .event(event):
             return .event(
                 title: event.title,

@@ -106,7 +106,26 @@ enum AgendaItemVisibility {
         ).sorted(by: AgendaItem.isOrderedBefore)
     }
 
-    static func shouldPrioritize(
+    /// All-day calendar events are a fallback so they cannot occupy the highlight ahead of meetings or reminders.
+    static func prioritizedIndex(
+        in items: [AgendaItem],
+        displayMode: MenuBarDisplayMode,
+        now: Date
+    ) -> Int? {
+        var allDayIndex: Int?
+        for index in items.indices where shouldPrioritize(items[index], displayMode: displayMode, now: now) {
+            if case let .event(event) = items[index], event.isAllDay {
+                if allDayIndex == nil {
+                    allDayIndex = index
+                }
+            } else {
+                return index
+            }
+        }
+        return allDayIndex
+    }
+
+    private static func shouldPrioritize(
         _ item: AgendaItem,
         displayMode: MenuBarDisplayMode,
         now: Date
