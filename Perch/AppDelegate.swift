@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let userDefaults = UserDefaults.standard
         #endif
         let settingsStore = SettingsStore(userDefaults: userDefaults)
+        let hiddenEventStore = HiddenEventStore(userDefaults: userDefaults)
         #if DEBUG
         let calendarProvider: AgendaProviding = usesDemoData
             ? DemoCalendarProvider(
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reminderProvider: calendarProvider,
             reminderPermissionController: reminderPermissionController,
             settingsStore: settingsStore,
+            hiddenEventStore: hiddenEventStore,
             settingsWindowController: settingsWindowController,
             dateIconDebugSettings: dateIconDebugSettings
         )
@@ -72,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             reminderProvider: calendarProvider,
             reminderPermissionController: reminderPermissionController,
             settingsStore: settingsStore,
+            hiddenEventStore: hiddenEventStore,
             settingsWindowController: settingsWindowController
         )
         #endif

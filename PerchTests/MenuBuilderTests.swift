@@ -306,7 +306,7 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.sections[0].rows[0].color, .perchMutedWhite)
     }
 
-    func testEventRowsAreEnabledAndOpenCalendarEvent() {
+    func testEventSubmenuCanOpenAndHideItsOccurrence() {
         let now = date(day: 6, hour: 9, minute: 0)
         let startDate = date(day: 6, hour: 10, minute: 0)
         let events = [
@@ -325,9 +325,10 @@ final class MenuBuilderTests: XCTestCase {
 
         XCTAssertTrue(snapshot.sections[0].rows[0].isEnabled)
         XCTAssertEqual(
-            snapshot.sections[0].rows[0].action,
+            snapshot.sections[0].rows[0].submenuRows[0].action,
             .openEvent(eventIdentifier: "calendar-item-id", startDate: startDate)
         )
+        XCTAssertEqual(snapshot.sections[0].rows[0].submenuRows.last?.action, .hideEvent(CalendarEventOccurrence(event: events[0])))
     }
 
     func testZoomEventRowsExposeActionsSubmenu() {
@@ -356,10 +357,11 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(row.submenuRows.filter { !$0.isSeparator }.map(\.title), [
             "Join Zoom",
             "Copy Meeting Link",
-            "Show in Calendar"
+            "Show in Calendar",
+            "Hide from menu bar",
+            "Hide completely"
         ])
         XCTAssertEqual(row.submenuRows[0].action, .joinMeeting(MeetingLink(url: zoomURL, provider: .zoom)))
-        XCTAssertEqual(row.submenuRows[0].keyEquivalent, "j")
         XCTAssertEqual(row.submenuRows[1].action, .copyMeetingLink(zoomURL))
         XCTAssertTrue(row.submenuRows[2].isSeparator)
         XCTAssertEqual(row.submenuRows[3].action, .openEvent(eventIdentifier: "calendar-item-id", startDate: startDate))
@@ -506,7 +508,7 @@ final class MenuBuilderTests: XCTestCase {
     }
 
     @MainActor
-    func testMenuItemPerformsOpenCalendarEvent() {
+    func testEventSubmenuPerformsOpenCalendarEvent() {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
             event(title: "Today Event", start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
@@ -515,7 +517,7 @@ final class MenuBuilderTests: XCTestCase {
         let target = MenuShortcutTarget()
         let menu = builder.makeMenu(from: snapshot, target: target)
 
-        menu.performActionForItem(at: 1)
+        menu.item(at: 1)?.submenu?.performActionForItem(at: 0)
 
         XCTAssertEqual(target.openCalendarEventCount, 1)
     }
@@ -612,7 +614,7 @@ final class MenuBuilderTests: XCTestCase {
     }
 
     @MainActor
-    func testZoomSubmenuPerformsShowInCalendar() {
+    func testZoomSubmenuPerformsShowInCalendar() throws {
         let now = date(day: 6, hour: 9, minute: 0)
         let events = [
             CalendarEvent(
@@ -633,7 +635,11 @@ final class MenuBuilderTests: XCTestCase {
         let target = MenuShortcutTarget()
         let menu = builder.makeMenu(from: snapshot, target: target)
 
-        menu.item(at: 1)?.submenu?.performActionForItem(at: 3)
+        let submenu = try XCTUnwrap(menu.item(at: 1)?.submenu as? NumberedActionMenu)
+        XCTAssertEqual(submenu.items.filter { !$0.isSeparatorItem }.map(\.keyEquivalent), ["1", "2", "3", "4", "5"])
+        submenu.menuWillOpen(submenu)
+        XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: "3", modifierFlags: [])))
+        submenu.menuDidClose(submenu)
 
         XCTAssertEqual(target.openCalendarEventCount, 1)
         XCTAssertEqual(target.joinMeetingCount, 0)
@@ -663,6 +669,35 @@ final class MenuBuilderTests: XCTestCase {
 
         XCTAssertEqual(target.copyMeetingLinkCount, 1)
         XCTAssertEqual(snapshot.sections[0].rows[0].submenuRows[1].action, .copyMeetingLink(zoomURL))
+    }
+
+    @MainActor
+    func testNumberShortcutsOnlyActOnTheOpenSubmenu() throws {
+        let first = event(title: "First", start: date(day: 6, hour: 10, minute: 0), end: date(day: 6, hour: 11, minute: 0))
+        let second = event(title: "Second", start: date(day: 6, hour: 12, minute: 0), end: date(day: 6, hour: 13, minute: 0))
+        let snapshot = builder.snapshot(accessState: .fullAccess, events: [first, second], now: date(day: 6, hour: 9, minute: 0), calendar: calendar)
+        let target = MenuShortcutTarget()
+        let menu = builder.makeMenu(from: snapshot, target: target)
+        let submenus = menu.items.compactMap { $0.submenu as? NumberedActionMenu }
+        let firstMenu = try XCTUnwrap(submenus.first)
+        let secondMenu = try XCTUnwrap(submenus.last)
+        XCTAssertEqual(submenus.count, 2)
+        let numberTwo = keyEvent(characters: "2", modifierFlags: [])
+
+        XCTAssertFalse(menu.performKeyEquivalent(with: numberTwo))
+        XCTAssertFalse(firstMenu.performKeyEquivalent(with: numberTwo))
+        firstMenu.menuWillOpen(firstMenu)
+        XCTAssertFalse(menu.performKeyEquivalent(with: keyEvent(characters: "2", modifierFlags: [.command])))
+        XCTAssertTrue(menu.performKeyEquivalent(with: numberTwo))
+        firstMenu.menuDidClose(firstMenu)
+        secondMenu.menuWillOpen(secondMenu)
+        XCTAssertTrue(menu.performKeyEquivalent(with: keyEvent(characters: "2", modifierFlags: [.capsLock])))
+        secondMenu.menuDidClose(secondMenu)
+        XCTAssertFalse(menu.performKeyEquivalent(with: numberTwo))
+
+        XCTAssertEqual(target.hideActions, [.hideFromBar(CalendarEventOccurrence(event: first)), .hideFromBar(CalendarEventOccurrence(event: second))])
+        XCTAssertEqual(target.openCalendarCount, 0)
+        XCTAssertEqual(target.openCalendarEventCount, 0)
     }
 
     @MainActor
@@ -763,6 +798,11 @@ private final class MenuShortcutTarget: NSObject {
     private(set) var openSettingsCount = 0
     private(set) var closeMenuCount = 0
     private(set) var quitCount = 0
+    private(set) var hideActions: [CalendarMenuAction] = []
+
+    @objc func hideCalendarEvent(_ sender: NSMenuItem) {
+        if let action = sender.representedObject as? CalendarMenuAction { hideActions.append(action) }
+    }
 
     @objc func openCalendarApp() {
         openCalendarCount += 1
