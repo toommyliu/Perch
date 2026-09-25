@@ -19,6 +19,7 @@ final class UpcomingMeetingNotificationWindowController {
     private var transitionGeneration = 0
     private var isPresenting = false
     private var isDismissing = false
+    private var keyStateObservers: [NSObjectProtocol] = []
 
     init() {
         hostingController = NSHostingController(rootView: AnyView(EmptyView()))
@@ -44,6 +45,25 @@ final class UpcomingMeetingNotificationWindowController {
         panel.contentMinSize = Self.contentSize
         panel.contentMaxSize = Self.contentSize
         panel.contentViewController = hostingController
+
+        // SwiftUI assigns initial focus while the panel is merely ordered front, so
+        // focus rings follow the panel's key state rather than @FocusState alone.
+        let center = NotificationCenter.default
+        keyStateObservers = [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didResignKeyNotification,
+        ].map { name in
+            center.addObserver(forName: name, object: panel, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.keyboardFocus.isPanelKey = self.panel.isKeyWindow
+                }
+            }
+        }
+    }
+
+    deinit {
+        keyStateObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     func present(
@@ -186,6 +206,7 @@ private final class MeetingNotificationPanel: NSPanel {
 @MainActor
 private final class MeetingNotificationKeyboardFocus: ObservableObject {
     @Published private(set) var requestID = 0
+    @Published var isPanelKey = false
 
     func focusJoinButton() {
         requestID += 1
@@ -255,7 +276,7 @@ private struct UpcomingMeetingNotificationView: View {
                             .lineLimit(1)
                     }
                 }
-                .buttonStyle(MeetingJoinButtonStyle(isFocused: focusedAction == .join))
+                .buttonStyle(MeetingJoinButtonStyle(isFocused: isShowingFocus(.join)))
                 .focusable()
                 .focusEffectDisabled()
                 .focused($focusedAction, equals: .join)
@@ -294,8 +315,8 @@ private struct UpcomingMeetingNotificationView: View {
             .overlay {
                 Circle()
                     .strokeBorder(
-                        focusedAction == .dismiss ? Color.accentColor : surfaceRingColor,
-                        lineWidth: focusedAction == .dismiss ? 2 : 0.5
+                        isShowingFocus(.dismiss) ? Color.accentColor : surfaceRingColor,
+                        lineWidth: isShowingFocus(.dismiss) ? 2 : 0.5
                     )
                     .allowsHitTesting(false)
             }
@@ -318,6 +339,10 @@ private struct UpcomingMeetingNotificationView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Meeting reminder")
+    }
+
+    private func isShowingFocus(_ action: FocusedAction) -> Bool {
+        keyboardFocus.isPanelKey && focusedAction == action
     }
 
     private var surfaceRingColor: Color {
